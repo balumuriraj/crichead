@@ -15,7 +15,14 @@
     "./firebase/admin": {
       "types": "./dist/firebase/admin.d.ts",
       "default": "./dist/firebase/admin.js"
+    },
+    "./hooks": {
+      "types": "./dist/hooks/index.d.ts",
+      "default": "./dist/hooks/index.js"
     }
+  },
+  "peerDependencies": {
+    "react": "^18.0.0"
   },
   "scripts": {
     "build": "tsc",
@@ -26,6 +33,7 @@
     "test:ui": "vitest --ui"
   },
   "devDependencies": {
+    "@types/react": "^18.3.18",
     "@vitest/ui": "^4.0.18",
     "typescript": "^5.7.3",
     "vitest": "^4.0.18"

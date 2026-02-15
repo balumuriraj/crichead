@@ -7,3 +7,11 @@ export interface Player {
   role: PlayerRole;
   hand: PlayerHand;
 }
+
+export interface Team {
+  id: string;
+  name: string;
+  logoUrl: string;
+  homeGround: string;
+  playerIds: string[];
+}

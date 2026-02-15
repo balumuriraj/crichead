@@ -7,12 +7,8 @@ export * from './utils';
 // Export Firebase client-side utilities
 export * from './firebase';
 
-// Additional Team interface for backward compatibility
-export interface Team {
-  id: string;
-  name: string;
-  playerIds: string[];
-}
+// Export React hooks
+export * from './hooks';
 
 /**
  * Firebase Admin SDK Usage:

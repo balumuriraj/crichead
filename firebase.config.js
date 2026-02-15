@@ -16,18 +16,18 @@
 module.exports = {
   // Firebase Client Configuration (used by web and mobile apps)
   client: {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID",
-    measurementId: "YOUR_MEASUREMENT_ID" // Optional: for Analytics
+  apiKey: "AIzaSyC4EKVna2ChIW0L-RXnFHt0LBkUX7NvIAI",
+  authDomain: "crichead-app.firebaseapp.com",
+  projectId: "crichead-app",
+  storageBucket: "crichead-app.firebasestorage.app",
+  messagingSenderId: "345345271554",
+  appId: "1:345345271554:web:f2dc213b6cbf909639441b",
+  measurementId: "G-M0SY4HQJ29" // Optional: for Analytics
   },
 
   // Firebase Admin Configuration (used by server-side code)
   admin: {
-    projectId: "YOUR_PROJECT_ID",
+    projectId: "crichead-app",
     // For service account credentials, create a JSON file at:
     // ./serviceAccountKey.json
     // Download from: Firebase Console > Project Settings > Service Accounts > Generate New Private Key

@@ -72,3 +72,17 @@ export function calculateRunRate(runs: number, overs: number, balls: number): nu
   if (totalOvers === 0) return 0;
   return runs / totalOvers;
 }
+
+/**
+ * Parse cricket overs notation back into over and ball components
+ * Inverse of formatOvers — e.g., 12.3 -> { currentOver: 12, currentBall: 3 }
+ * @param overs - Overs in cricket notation (e.g., 12.3)
+ * @returns Object with currentOver and currentBall
+ */
+export function parseOvers(overs: number): { currentOver: number; currentBall: number } {
+  const oversStr = overs.toFixed(1);
+  const dotIndex = oversStr.indexOf('.');
+  const currentOver = parseInt(oversStr.substring(0, dotIndex), 10);
+  const currentBall = parseInt(oversStr.substring(dotIndex + 1), 10);
+  return { currentOver, currentBall };
+}
