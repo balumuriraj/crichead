@@ -8,7 +8,14 @@ const config: Config = {
     '../../packages/ui/**/*.{js,ts,jsx,tsx}',
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        'electric-green': '#00FF41',
+        'deep-navy': '#0F172A',
+        'navy-800': '#1E293B',
+        'navy-700': '#334155',
+      },
+    },
   },
   plugins: [],
 }

@@ -3,13 +3,29 @@
   "version": "0.0.0",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./mobile": {
+      "types": "./dist/mobile/index.d.ts",
+      "default": "./dist/mobile/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "lint": "tsc --noEmit"
   },
   "peerDependencies": {
-    "react": "^18.3.0"
+    "react": "^18.3.0",
+    "react-native": ">=0.70.0"
+  },
+  "peerDependenciesMeta": {
+    "react-native": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/react": "^18.3.18",
