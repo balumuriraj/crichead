@@ -25,9 +25,10 @@ interface Props {
   matches: MatchForTable[];
   pointsSystem: PointsSystem;
   teamNames: Record<string, string>;
+  maxOvers?: number;
 }
 
-export default function PointsTable({ matches, pointsSystem, teamNames }: Props) {
+export default function PointsTable({ matches, pointsSystem, teamNames, maxOvers = 20 }: Props) {
   const table: PointsTableEntry[] = useMemo(
     () =>
       calculatePointsTable(
@@ -36,9 +37,10 @@ export default function PointsTable({ matches, pointsSystem, teamNames }: Props)
           toss: null,
           innings: m.innings.map((inn) => ({ ...inn, balls: [] })),
         })),
-        pointsSystem
+        pointsSystem,
+        maxOvers
       ),
-    [matches, pointsSystem]
+    [matches, pointsSystem, maxOvers]
   );
 
   if (table.length === 0) {

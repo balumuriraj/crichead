@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import {
   getFirestore,
   doc,
@@ -63,31 +62,14 @@ export default function AdminSettingsPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#0F172A] flex items-center justify-center">
+      <div className="flex items-center justify-center py-20">
         <div className="w-8 h-8 border-2 border-[#00FF41] border-t-transparent rounded-full animate-spin" />
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[#0F172A]">
-      {/* Header */}
-      <header className="border-b border-[#334155] px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-              <div className="w-3 h-3 rounded-full bg-[#00FF41] animate-pulse-green" />
-              <h1 className="text-xl font-bold text-white tracking-tight">
-                cric<span className="text-[#00FF41]">head</span>
-              </h1>
-            </Link>
-            <span className="text-gray-600 mx-2">/</span>
-            <span className="text-sm text-gray-400">Admin Settings</span>
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-6xl mx-auto p-6">
+    <div className="max-w-6xl mx-auto p-6">
         <h2 className="text-xs font-bold text-gray-500 tracking-widest mb-6">THEME SETTINGS</h2>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -188,7 +170,6 @@ export default function AdminSettingsPage() {
             />
           </div>
         </div>
-      </div>
-    </main>
+    </div>
   );
 }

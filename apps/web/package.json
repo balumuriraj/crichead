@@ -9,11 +9,12 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@crichead/core": "*",
+    "@crichead/ui": "*",
+    "lucide-react": "^0.564.0",
     "next": "^15.1.6",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "@crichead/core": "*",
-    "@crichead/ui": "*"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",

@@ -59,11 +59,14 @@ function getMatchResult(
  *
  * @param matches - Array of Match objects (only 'finished' matches with 2 innings are counted)
  * @param pointsSystem - Points awarded per win, loss, tie, draw
+ * @param maxOvers - Full over quota for the format (e.g. 20 for T20). When a team is
+ *   bowled out before completing their overs, maxOvers is used for NRR instead of actual overs.
  * @returns Sorted array of PointsTableEntry (by points desc, then NRR desc)
  */
 export function calculatePointsTable(
   matches: Match[],
-  pointsSystem: PointsSystem
+  pointsSystem: PointsSystem,
+  maxOvers: number = 20
 ): PointsTableEntry[] {
   const teamStats = new Map<
     string,
@@ -120,10 +123,16 @@ export function calculatePointsTable(
       const bowlingInnings = match.innings.find((inn) => inn.teamId !== teamId);
 
       if (battingInnings && bowlingInnings) {
+        // ICC rule: if a team is bowled out, use the full over quota for NRR
+        const oversFaced =
+          battingInnings.totalWickets >= 10 ? maxOvers : inningsToOvers(battingInnings);
+        const oversBowled =
+          bowlingInnings.totalWickets >= 10 ? maxOvers : inningsToOvers(bowlingInnings);
+
         entry.nrr.runsScored += battingInnings.totalRuns;
-        entry.nrr.oversfaced += inningsToOvers(battingInnings);
+        entry.nrr.oversfaced += oversFaced;
         entry.nrr.runsConceded += bowlingInnings.totalRuns;
-        entry.nrr.oversBowled += inningsToOvers(bowlingInnings);
+        entry.nrr.oversBowled += oversBowled;
       }
     }
   }
