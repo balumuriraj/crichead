@@ -1,51 +1,18 @@
-import React from 'react';
-import { View, StyleSheet, ViewStyle } from 'react-native';
-import { Colors, Spacing, BorderRadius } from './theme';
+import React, { useCallback } from 'react';
+import { View, ViewStyle } from 'react-native';
+import { Spacing, BorderRadius } from './theme';
+import { useThemedColors } from './useThemedColors';
 
 export interface OverProgressProps {
-  /**
-   * Number of balls bowled in current over (0-6)
-   */
   ballsBowled: number;
-  /**
-   * Total balls per over (default 6)
-   */
   ballsPerOver?: number;
-  /**
-   * Custom style for the container
-   */
   style?: ViewStyle;
-  /**
-   * Size of each dot
-   * @default 'md'
-   */
   size?: 'sm' | 'md' | 'lg';
-  /**
-   * Show different colors for different ball outcomes
-   * - 'W' for wicket (red)
-   * - 4 or 6 for boundary (green)
-   * - null for normal ball (white)
-   */
   ballOutcomes?: Array<'W' | 4 | 6 | null>;
 }
 
-/**
- * OverProgress - Visual indicator showing balls bowled in current over
- *
- * Features:
- * - Shows 6 dots representing balls in an over
- * - Fills up as balls are bowled
- * - Can show different colors for wickets and boundaries
- * - Responsive sizing
- *
- * @example
- * ```tsx
- * <OverProgress
- *   ballsBowled={3}
- *   ballOutcomes={[null, 4, 'W']}
- * />
- * ```
- */
+const DOT_SIZES = { sm: 8, md: 12, lg: 16 } as const;
+
 export function OverProgress({
   ballsBowled,
   ballsPerOver = 6,
@@ -53,60 +20,36 @@ export function OverProgress({
   size = 'md',
   ballOutcomes = [],
 }: OverProgressProps) {
+  const colors = useThemedColors();
   const dotSize = DOT_SIZES[size];
   const dots = Array.from({ length: ballsPerOver }, (_, i) => i);
 
-  const getDotColor = (index: number): string => {
-    if (index >= ballsBowled) {
-      return Colors.gray700; // Empty/unfilled
-    }
-
-    const outcome = ballOutcomes[index];
-    if (outcome === 'W') {
-      return Colors.error; // Wicket
-    }
-    if (outcome === 4 || outcome === 6) {
-      return Colors.electricGreen; // Boundary
-    }
-
-    return Colors.white; // Normal ball
-  };
+  const getDotColor = useCallback(
+    (index: number): string => {
+      if (index >= ballsBowled) return colors.gray700;
+      const outcome = ballOutcomes[index];
+      if (outcome === 'W') return colors.error;
+      if (outcome === 4 || outcome === 6) return colors.electricGreen;
+      return colors.white;
+    },
+    [ballsBowled, ballOutcomes, colors]
+  );
 
   return (
-    <View style={[styles.container, style]}>
+    <View style={[{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm } as ViewStyle, style]}>
       {dots.map((index) => (
         <View
           key={index}
-          style={[
-            styles.dot,
-            {
-              width: dotSize,
-              height: dotSize,
-              backgroundColor: getDotColor(index),
-              borderColor:
-                index >= ballsBowled ? Colors.gray700 : 'transparent',
-            },
-          ]}
+          style={{
+            width: dotSize,
+            height: dotSize,
+            borderRadius: BorderRadius.full,
+            borderWidth: 1.5,
+            backgroundColor: getDotColor(index),
+            borderColor: index >= ballsBowled ? colors.gray700 : 'transparent',
+          }}
         />
       ))}
     </View>
   );
 }
-
-const DOT_SIZES = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-} as const;
-
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  dot: {
-    borderRadius: BorderRadius.full,
-    borderWidth: 1.5,
-  },
-});

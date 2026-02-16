@@ -1,4 +1,7 @@
+'use client';
+
 import React from 'react';
+import { useTheme } from './ThemeContext';
 
 export interface CardProps {
   children: React.ReactNode;
@@ -6,8 +9,13 @@ export interface CardProps {
 }
 
 export function Card({ children, className = '' }: CardProps) {
+  const theme = useTheme();
+
   return (
-    <div className={`bg-white rounded-lg shadow-md p-6 ${className}`}>
+    <div
+      className={`rounded-lg shadow-md p-6 ${className}`}
+      style={{ backgroundColor: theme.secondaryColor }}
+    >
       {children}
     </div>
   );
@@ -33,7 +41,7 @@ export interface CardTitleProps {
 
 export function CardTitle({ children, className = '' }: CardTitleProps) {
   return (
-    <h3 className={`text-xl font-bold text-gray-900 ${className}`}>
+    <h3 className={`text-xl font-bold text-white ${className}`}>
       {children}
     </h3>
   );

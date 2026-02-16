@@ -12,6 +12,7 @@
 
 // Export theme/design system
 export * from './theme';
+export { useThemedColors } from './useThemedColors';
 
 // Export components
 export * from './ScoreButton';
