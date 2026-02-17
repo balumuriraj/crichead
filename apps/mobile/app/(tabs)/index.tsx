@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,13 +6,16 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Calendar, ChevronRight, Play } from 'lucide-react-native';
+import { Calendar, ChevronRight, Play, ChevronDown, Zap } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
 import { getFirebaseDb } from '@crichead/core';
-import { collection, onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, limit } from 'firebase/firestore';
 
 interface MatchDoc {
   id: string;
@@ -25,6 +28,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const [matches, setMatches] = useState<MatchDoc[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showDropdown, setShowDropdown] = useState(false);
 
   useEffect(() => {
     const db = getFirebaseDb();
@@ -50,15 +54,79 @@ export default function HomeScreen() {
         <Text style={styles.brand}>
           cric<Text style={styles.brandAccent}>head</Text>
         </Text>
-        <TouchableOpacity
-          style={styles.startMatchButton}
-          onPress={() => router.push('/match/new')}
-          activeOpacity={0.8}
-        >
-          <Play size={16} color={Colors.deepNavy} strokeWidth={3} />
-          <Text style={styles.startMatchText}>Start Match</Text>
-        </TouchableOpacity>
+
+        {/* Split Button */}
+        <View style={styles.splitButton}>
+          <TouchableOpacity
+            style={styles.splitMain}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              router.push('/match/new');
+            }}
+            activeOpacity={0.8}
+          >
+            <Play size={14} color={Colors.deepNavy} strokeWidth={3} />
+            <Text style={styles.splitMainText}>Start Match</Text>
+          </TouchableOpacity>
+          <View style={styles.splitDivider} />
+          <TouchableOpacity
+            style={styles.splitDropdown}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setShowDropdown(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <ChevronDown size={14} color={Colors.deepNavy} strokeWidth={3} />
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {/* Dropdown Menu */}
+      <Modal
+        visible={showDropdown}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDropdown(false)}
+      >
+        <Pressable style={styles.overlay} onPress={() => setShowDropdown(false)}>
+          <View style={styles.dropdownMenu}>
+            <TouchableOpacity
+              style={styles.dropdownItem}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setShowDropdown(false);
+                router.push('/match/new');
+              }}
+              activeOpacity={0.7}
+            >
+              <Play size={16} color={Colors.electricGreen} strokeWidth={2.5} />
+              <View style={styles.dropdownItemInfo}>
+                <Text style={styles.dropdownItemTitle}>New Match</Text>
+                <Text style={styles.dropdownItemHint}>Full setup wizard</Text>
+              </View>
+            </TouchableOpacity>
+            <View style={styles.dropdownDivider} />
+            <TouchableOpacity
+              style={styles.dropdownItem}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setShowDropdown(false);
+                router.push('/match/quick');
+              }}
+              activeOpacity={0.7}
+            >
+              <Zap size={16} color={Colors.warning} strokeWidth={2.5} />
+              <View style={styles.dropdownItemInfo}>
+                <Text style={styles.dropdownItemTitle}>Quick Match</Text>
+                <Text style={styles.dropdownItemHint}>
+                  Skip setup, start instantly
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
         {/* Live Matches */}
@@ -142,20 +210,82 @@ const styles = StyleSheet.create({
   brandAccent: {
     color: Colors.electricGreen,
   },
-  startMatchButton: {
+
+  /* ── Split Button ── */
+  splitButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.electricGreen,
     borderRadius: BorderRadius.lg,
+    overflow: 'hidden',
+  },
+  splitMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     gap: Spacing.xs,
   },
-  startMatchText: {
+  splitMainText: {
     fontSize: Typography.fontSize.sm,
     fontWeight: Typography.fontWeight.bold,
     color: Colors.deepNavy,
   },
+  splitDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: Colors.deepNavy + '33',
+  },
+  splitDropdown: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  /* ── Dropdown Menu ── */
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    paddingTop: 100,
+    paddingRight: Spacing.lg,
+  },
+  dropdownMenu: {
+    backgroundColor: Colors.gray800,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    width: 220,
+    overflow: 'hidden',
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.md,
+    gap: Spacing.md,
+  },
+  dropdownItemInfo: {
+    flex: 1,
+  },
+  dropdownItemTitle: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.white,
+  },
+  dropdownItemHint: {
+    fontSize: Typography.fontSize.xs,
+    color: Colors.gray500,
+    marginTop: 1,
+  },
+  dropdownDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginHorizontal: Spacing.md,
+  },
+
+  /* ── Content ── */
   content: {
     flex: 1,
   },

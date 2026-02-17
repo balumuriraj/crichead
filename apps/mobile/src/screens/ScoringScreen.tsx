@@ -170,6 +170,24 @@ export default function ScoringScreen({ matchId = null }: ScoringScreenProps) {
   const currentOverFormatted = formatOvers(stats.currentOver, stats.currentBall);
   const runRate = calculateRunRate(stats.totalRuns, stats.currentOver, stats.currentBall);
 
+  // Innings / match end detection
+  const maxOvers = match?.oversPerInnings ?? 0;
+  const maxWickets = (match?.playersPerSide ?? 11) - 1;
+  const matchStatus = match?.status ?? 'live';
+  const currentInningsIndex = match?.currentInningsIndex ?? 0;
+
+  const allOversCompleted =
+    maxOvers > 0 && stats.currentOver >= maxOvers && stats.currentBall === 0;
+  const allOut = stats.totalWickets >= maxWickets;
+  const isMatchFinished = matchStatus === 'finished';
+  const isInningsComplete = allOversCompleted || allOut || isMatchFinished;
+  const scoringDisabled = isLiveMode && isInningsComplete;
+
+  // Second innings target info
+  const firstInningsRuns =
+    match && match.innings.length > 1 ? match.innings[0].totalRuns : null;
+  const isChasing = currentInningsIndex === 1 && firstInningsRuns !== null;
+
   // Current over balls for the OverProgress dots
   const currentOverBalls = useMemo(() => {
     const validBallsCount = stats.currentOver * 6 + stats.currentBall;
@@ -424,6 +442,50 @@ export default function ScoringScreen({ matchId = null }: ScoringScreenProps) {
           style={styles.header}
         />
 
+        {/* Target info (chasing) */}
+        {isLiveMode && isChasing && !isMatchFinished && (
+          <View style={styles.targetBanner}>
+            <Text style={styles.targetText}>
+              Target: {firstInningsRuns! + 1} — Need{' '}
+              {Math.max(0, firstInningsRuns! + 1 - stats.totalRuns)} from{' '}
+              {maxOvers > 0
+                ? Math.max(0, maxOvers * 6 - (stats.currentOver * 6 + stats.currentBall))
+                : '?'}{' '}
+              balls
+            </Text>
+          </View>
+        )}
+
+        {/* Innings / Match end banner */}
+        {isLiveMode && isInningsComplete && (
+          <View
+            style={[
+              styles.inningsEndBanner,
+              isMatchFinished && styles.matchEndBanner,
+            ]}
+          >
+            <Text style={styles.inningsEndTitle}>
+              {isMatchFinished
+                ? 'MATCH FINISHED'
+                : 'INNINGS COMPLETE'}
+            </Text>
+            <Text style={styles.inningsEndReason}>
+              {isMatchFinished && currentInningsIndex === 1 && firstInningsRuns !== null
+                ? stats.totalRuns > firstInningsRuns
+                  ? `${match?.innings[1]?.teamId ?? 'Team'} wins by ${maxWickets - stats.totalWickets} wickets`
+                  : stats.totalRuns === firstInningsRuns
+                    ? 'Match Tied'
+                    : `${match?.innings[0]?.teamId ?? 'Team'} wins by ${firstInningsRuns - stats.totalRuns} runs`
+                : allOut
+                  ? `All out — ${stats.totalWickets} wickets`
+                  : `${maxOvers} overs completed`}
+            </Text>
+            <Text style={styles.inningsEndScore}>
+              {stats.totalRuns}/{stats.totalWickets} ({currentOverFormatted} ov)
+            </Text>
+          </View>
+        )}
+
         {/* Current Over Progress */}
         <View style={styles.overSection}>
           <Text style={styles.sectionTitle}>CURRENT OVER</Text>
@@ -497,51 +559,61 @@ export default function ScoringScreen({ matchId = null }: ScoringScreenProps) {
       </ScrollView>
 
       {/* Scoring Buttons - Fixed at bottom for thumb access */}
-      <View style={styles.buttonSection}>
-        <Text style={styles.buttonSectionTitle}>SCORE RUNS</Text>
-
-        {/* Score Buttons - Two rows for thumb-first layout */}
-        <View style={styles.scoreGrid}>
-          <View style={styles.scoreRow}>
-            {[0, 1, 2].map((runs) => (
-              <ScoreButton
-                key={runs}
-                value={runs}
-                onPress={handleScore}
-                style={styles.scoreButtonSpacing}
-              />
-            ))}
+      <View style={[styles.buttonSection, scoringDisabled && styles.buttonSectionDisabled]}>
+        {scoringDisabled ? (
+          <View style={styles.disabledOverlay}>
+            <Text style={styles.disabledText}>
+              {isMatchFinished ? 'Match has ended' : 'Innings complete'}
+            </Text>
           </View>
-          <View style={styles.scoreRow}>
-            {[3, 4, 6].map((runs) => (
-              <ScoreButton
-                key={runs}
-                value={runs}
-                onPress={handleScore}
-                style={styles.scoreButtonSpacing}
-              />
-            ))}
-          </View>
-        </View>
+        ) : (
+          <>
+            <Text style={styles.buttonSectionTitle}>SCORE RUNS</Text>
 
-        {/* Extra Buttons */}
-        <View style={styles.extraRow}>
-          {(['WD', 'NB', 'B', 'LB'] as ExtraType[]).map((type) => (
-            <ExtraButton
-              key={type}
-              type={type}
-              onPress={handleExtra}
-              style={styles.extraButtonSpacing}
+            {/* Score Buttons - Two rows for thumb-first layout */}
+            <View style={styles.scoreGrid}>
+              <View style={styles.scoreRow}>
+                {[0, 1, 2].map((runs) => (
+                  <ScoreButton
+                    key={runs}
+                    value={runs}
+                    onPress={handleScore}
+                    style={styles.scoreButtonSpacing}
+                  />
+                ))}
+              </View>
+              <View style={styles.scoreRow}>
+                {[3, 4, 6].map((runs) => (
+                  <ScoreButton
+                    key={runs}
+                    value={runs}
+                    onPress={handleScore}
+                    style={styles.scoreButtonSpacing}
+                  />
+                ))}
+              </View>
+            </View>
+
+            {/* Extra Buttons */}
+            <View style={styles.extraRow}>
+              {(['WD', 'NB', 'B', 'LB'] as ExtraType[]).map((type) => (
+                <ExtraButton
+                  key={type}
+                  type={type}
+                  onPress={handleExtra}
+                  style={styles.extraButtonSpacing}
+                />
+              ))}
+            </View>
+
+            {/* Wicket Button */}
+            <WicketButton
+              onPress={handleWicket}
+              pulse={balls.length > 0}
+              style={styles.wicketButton}
             />
-          ))}
-        </View>
-
-        {/* Wicket Button */}
-        <WicketButton
-          onPress={handleWicket}
-          pulse={balls.length > 0}
-          style={styles.wicketButton}
-        />
+          </>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -785,5 +857,66 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.base,
     fontWeight: Typography.fontWeight.semibold,
     color: Colors.white,
+  },
+  // Target banner
+  targetBanner: {
+    backgroundColor: Colors.electricGreen + '1A',
+    borderWidth: 1,
+    borderColor: Colors.electricGreen + '4D',
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  targetText: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.electricGreen,
+    textAlign: 'center',
+  },
+  // Innings / Match end banner
+  inningsEndBanner: {
+    backgroundColor: Colors.warning + '1A',
+    borderWidth: 1,
+    borderColor: Colors.warning + '4D',
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.lg,
+    alignItems: 'center',
+  },
+  matchEndBanner: {
+    backgroundColor: Colors.electricGreen + '1A',
+    borderColor: Colors.electricGreen + '4D',
+  },
+  inningsEndTitle: {
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.white,
+    letterSpacing: 2,
+    marginBottom: Spacing.xs,
+  },
+  inningsEndReason: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.xs,
+  },
+  inningsEndScore: {
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.electricGreen,
+  },
+  // Disabled scoring section
+  buttonSectionDisabled: {
+    opacity: 0.5,
+  },
+  disabledOverlay: {
+    paddingVertical: Spacing.xl,
+    alignItems: 'center',
+  },
+  disabledText: {
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.textSecondary,
+    letterSpacing: 1,
   },
 });

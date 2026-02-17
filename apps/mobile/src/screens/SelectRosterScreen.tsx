@@ -8,10 +8,11 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Alert,
+  TextInput,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
-import { getFirebaseDb, type PlayerRole } from '@crichead/core';
+import { getFirebaseDb, type PlayerRole, type Toss, type MatchConfig } from '@crichead/core';
 import { collection, onSnapshot, addDoc } from 'firebase/firestore';
 import type { TeamInfo } from './SelectTeamsScreen';
 
@@ -25,23 +26,34 @@ interface PlayerDoc {
 interface Props {
   teamA: TeamInfo;
   teamB: TeamInfo;
+  toss: Toss;
+  config?: MatchConfig;
   onNext: (matchId: string) => void;
   onBack: () => void;
+  onCancel?: () => void;
 }
 
-const roleLabels: Record<PlayerRole, string> = {
-  bat: 'BAT',
-  bowl: 'BOWL',
-  all: 'ALL',
+const ROLE_LABELS: Record<PlayerRole, string> = {
+  bat: 'RHB',
+  bowl: 'RAF',
+  all: 'AR',
 };
 
-const roleBadgeColors: Record<PlayerRole, { bg: string; text: string }> = {
-  bat: { bg: '#3B82F620', text: '#3B82F6' },
-  bowl: { bg: '#EF444420', text: '#EF4444' },
-  all: { bg: '#A855F720', text: '#A855F7' },
+const ROLE_ICONS: Record<PlayerRole, string> = {
+  bat: '\uD83C\uDFCF',
+  bowl: '\uD83E\uDD4E',
+  all: '\u221E',
 };
 
-export default function SelectRosterScreen({ teamA, teamB, onNext, onBack }: Props) {
+export default function SelectRosterScreen({
+  teamA,
+  teamB,
+  toss,
+  config,
+  onNext,
+  onBack,
+  onCancel,
+}: Props) {
   const [playersA, setPlayersA] = useState<PlayerDoc[]>([]);
   const [playersB, setPlayersB] = useState<PlayerDoc[]>([]);
   const [selectedA, setSelectedA] = useState<Set<string>>(new Set());
@@ -49,26 +61,54 @@ export default function SelectRosterScreen({ teamA, teamB, onNext, onBack }: Pro
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'A' | 'B'>('A');
+
+  // Add player state
+  const [showAddPlayer, setShowAddPlayer] = useState(false);
+  const [newPlayerName, setNewPlayerName] = useState('');
+  const [newPlayerRole, setNewPlayerRole] = useState<PlayerRole>('bat');
+  const [savingPlayer, setSavingPlayer] = useState(false);
+
   useEffect(() => {
     const db = getFirebaseDb();
     let loaded = 0;
-    const checkLoaded = () => { if (++loaded >= 2) setLoading(false); };
+    const checkLoaded = () => {
+      if (++loaded >= 2) setLoading(false);
+    };
 
-    const unsubA = onSnapshot(collection(db, 'teams', teamA.id, 'players'), (snap) => {
-      setPlayersA(snap.docs.map((d) => ({ id: d.id, ...d.data() } as PlayerDoc)));
-      checkLoaded();
-    });
-    const unsubB = onSnapshot(collection(db, 'teams', teamB.id, 'players'), (snap) => {
-      setPlayersB(snap.docs.map((d) => ({ id: d.id, ...d.data() } as PlayerDoc)));
-      checkLoaded();
-    });
+    const unsubA = onSnapshot(
+      collection(db, 'teams', teamA.id, 'players'),
+      (snap) => {
+        setPlayersA(
+          snap.docs.map((d) => ({ id: d.id, ...d.data() } as PlayerDoc)),
+        );
+        checkLoaded();
+      },
+    );
+    const unsubB = onSnapshot(
+      collection(db, 'teams', teamB.id, 'players'),
+      (snap) => {
+        setPlayersB(
+          snap.docs.map((d) => ({ id: d.id, ...d.data() } as PlayerDoc)),
+        );
+        checkLoaded();
+      },
+    );
 
-    return () => { unsubA(); unsubB(); };
+    return () => {
+      unsubA();
+      unsubB();
+    };
   }, [teamA.id, teamB.id]);
 
-  function togglePlayer(teamSide: 'A' | 'B', playerId: string) {
+  const activePlayers = activeTab === 'A' ? playersA : playersB;
+  const activeSelected = activeTab === 'A' ? selectedA : selectedB;
+  const activeTeam = activeTab === 'A' ? teamA : teamB;
+
+  function togglePlayer(playerId: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const setter = teamSide === 'A' ? setSelectedA : setSelectedB;
+    const setter = activeTab === 'A' ? setSelectedA : setSelectedB;
     setter((prev) => {
       const next = new Set(prev);
       if (next.has(playerId)) {
@@ -81,11 +121,25 @@ export default function SelectRosterScreen({ teamA, teamB, onNext, onBack }: Pro
     });
   }
 
-  function selectAll(teamSide: 'A' | 'B') {
-    const players = teamSide === 'A' ? playersA : playersB;
-    const setter = teamSide === 'A' ? setSelectedA : setSelectedB;
-    setter(new Set(players.slice(0, 11).map((p) => p.id)));
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  async function handleAddPlayer() {
+    const trimmed = newPlayerName.trim();
+    if (!trimmed) return;
+    setSavingPlayer(true);
+    try {
+      const db = getFirebaseDb();
+      await addDoc(collection(db, 'teams', activeTeam.id, 'players'), {
+        name: trimmed,
+        role: newPlayerRole,
+        hand: 'right',
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setNewPlayerName('');
+      setShowAddPlayer(false);
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setSavingPlayer(false);
+    }
   }
 
   async function handleStartMatch() {
@@ -106,15 +160,23 @@ export default function SelectRosterScreen({ teamA, teamB, onNext, onBack }: Pro
         .filter((p) => selectedB.has(p.id))
         .map((p) => ({ id: p.id, name: p.name, role: p.role }));
 
+      // Determine batting first team based on toss
+      const battingFirstTeamId =
+        toss.decision === 'bat'
+          ? toss.winner
+          : toss.winner === teamA.id
+            ? teamB.id
+            : teamA.id;
+
       const matchDoc = {
         teamA: teamA.id,
         teamB: teamB.id,
-        toss: null,
+        toss,
         status: 'live' as const,
         currentInningsIndex: 0,
         innings: [
           {
-            teamId: teamA.id,
+            teamId: battingFirstTeamId,
             totalRuns: 0,
             totalWickets: 0,
             overs: 0,
@@ -125,12 +187,17 @@ export default function SelectRosterScreen({ teamA, teamB, onNext, onBack }: Pro
           [teamA.id]: xiA,
           [teamB.id]: xiB,
         },
+        oversPerInnings: config?.oversPerInnings ?? 20,
+        playersPerSide: Math.max(xiA.length, xiB.length),
       };
 
       const ref = await addDoc(collection(db, 'matches'), matchDoc);
       onNext(ref.id);
     } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to create match');
+      Alert.alert(
+        'Error',
+        err instanceof Error ? err.message : 'Failed to create match',
+      );
       setCreating(false);
     }
   }
@@ -152,46 +219,249 @@ export default function SelectRosterScreen({ teamA, teamB, onNext, onBack }: Pro
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} activeOpacity={0.7}>
-          <Text style={styles.backText}>← Back</Text>
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            (onCancel ?? onBack)();
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.cancelText}>Cancel</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>SELECT PLAYING XI</Text>
-        <Text style={styles.subtitle}>
-          {teamA.name} vs {teamB.name}
-        </Text>
+        <Text style={styles.headerTitle}>New Match</Text>
+        <View style={{ width: 60 }} />
       </View>
 
-      <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-        {/* Team A */}
-        <TeamSection
-          teamName={teamA.name}
-          players={playersA}
-          selected={selectedA}
-          onToggle={(id) => togglePlayer('A', id)}
-          onSelectAll={() => selectAll('A')}
-        />
+      {/* Step Indicator */}
+      <View style={styles.stepRow}>
+        <Text style={styles.stepLabelActive}>STEP 4</Text>
+        <View style={styles.stepBarContainer}>
+          <View style={[styles.stepBar, styles.stepBarActive]} />
+          <View style={[styles.stepBar, styles.stepBarActive]} />
+          <View style={[styles.stepBar, styles.stepBarActive]} />
+          <View style={[styles.stepBar, styles.stepBarActive]} />
+        </View>
+        <Text style={styles.stepLabel}>STEP 4</Text>
+      </View>
 
-        {/* Divider */}
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>vs</Text>
-          <View style={styles.dividerLine} />
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* ── Playing XI Header ── */}
+        <View style={styles.xiHeader}>
+          <Text style={styles.xiTitle}>Playing XI</Text>
+          <View style={styles.selectedBadge}>
+            <Text style={styles.selectedBadgeText}>
+              {activeSelected.size} Selected
+            </Text>
+          </View>
         </View>
 
-        {/* Team B */}
-        <TeamSection
-          teamName={teamB.name}
-          players={playersB}
-          selected={selectedB}
-          onToggle={(id) => togglePlayer('B', id)}
-          onSelectAll={() => selectAll('B')}
-        />
+        {/* ── Team Tabs ── */}
+        <View style={styles.tabRow}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'A' && styles.tabActive]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setActiveTab('A');
+              setShowAddPlayer(false);
+            }}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === 'A' && styles.tabTextActive,
+              ]}
+            >
+              {teamA.name}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'B' && styles.tabActive]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setActiveTab('B');
+              setShowAddPlayer(false);
+            }}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === 'B' && styles.tabTextActive,
+              ]}
+            >
+              {teamB.name}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Column Headers ── */}
+        <View style={styles.colHeader}>
+          <Text style={[styles.colText, { width: 32 }]}>#</Text>
+          <Text style={[styles.colText, { flex: 1 }]}>PLAYER</Text>
+          <Text style={[styles.colText, { width: 60, textAlign: 'center' }]}>
+            ROLE
+          </Text>
+          <Text style={[styles.colText, { width: 40, textAlign: 'center' }]}>
+            SEL
+          </Text>
+        </View>
+
+        {/* ── Player Rows ── */}
+        {activePlayers.length === 0 && !showAddPlayer ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>No players registered</Text>
+            <Text style={styles.emptyHint}>
+              Add players using the button below
+            </Text>
+          </View>
+        ) : (
+          activePlayers.map((player, idx) => {
+            const isSelected = activeSelected.has(player.id);
+            return (
+              <TouchableOpacity
+                key={player.id}
+                style={[styles.playerRow, isSelected && styles.playerRowSelected]}
+                onPress={() => togglePlayer(player.id)}
+                activeOpacity={0.7}
+              >
+                {/* Number */}
+                <Text style={styles.playerNum}>
+                  {String(idx + 1).padStart(2, '0')}
+                </Text>
+
+                {/* Info */}
+                <View style={styles.playerInfo}>
+                  <Text
+                    style={[
+                      styles.playerName,
+                      isSelected && styles.playerNameSelected,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {player.name}
+                  </Text>
+                  <View style={styles.playerBadges}>
+                    <View style={styles.roleBadge}>
+                      <Text style={styles.roleBadgeText}>
+                        {ROLE_LABELS[player.role]}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Role icon */}
+                <Text style={styles.roleIcon}>{ROLE_ICONS[player.role]}</Text>
+
+                {/* Checkbox */}
+                <View
+                  style={[
+                    styles.checkbox,
+                    isSelected && styles.checkboxSelected,
+                  ]}
+                >
+                  {isSelected && (
+                    <Text style={styles.checkmark}>{'\u2713'}</Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+            );
+          })
+        )}
+
+        {/* ── Add New Player ── */}
+        {showAddPlayer ? (
+          <View style={styles.addPlayerForm}>
+            <TextInput
+              style={styles.addPlayerInput}
+              placeholder="Player name"
+              placeholderTextColor={Colors.gray500}
+              value={newPlayerName}
+              onChangeText={setNewPlayerName}
+              autoFocus
+            />
+            <View style={styles.rolePickerRow}>
+              {(
+                [
+                  ['bat', 'Batsman'],
+                  ['bowl', 'Bowler'],
+                  ['all', 'All-rounder'],
+                ] as [PlayerRole, string][]
+              ).map(([role, label]) => (
+                <TouchableOpacity
+                  key={role}
+                  style={[
+                    styles.rolePickerBtn,
+                    newPlayerRole === role && styles.rolePickerBtnActive,
+                  ]}
+                  onPress={() => setNewPlayerRole(role)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.rolePickerText,
+                      newPlayerRole === role && styles.rolePickerTextActive,
+                    ]}
+                  >
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.addPlayerActions}>
+              <TouchableOpacity
+                style={styles.addPlayerCancelBtn}
+                onPress={() => {
+                  setShowAddPlayer(false);
+                  setNewPlayerName('');
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.addPlayerCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.addPlayerSaveBtn,
+                  (!newPlayerName.trim() || savingPlayer) && styles.disabledBtn,
+                ]}
+                onPress={handleAddPlayer}
+                disabled={!newPlayerName.trim() || savingPlayer}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.addPlayerSaveText}>
+                  {savingPlayer ? 'Saving...' : 'Add'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.addPlayerCard}
+            onPress={() => setShowAddPlayer(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.addPlayerCardIcon}>{'\uD83D\uDC65'}</Text>
+            <Text style={styles.addPlayerCardText}>Add New Player</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
-      {/* Footer */}
+      {/* ── Footer ── */}
       <View style={styles.footer}>
+        <View style={styles.footerCounts}>
+          <Text style={styles.footerCountWhite}>
+            {teamA.name.toUpperCase()}: {selectedA.size}/11
+          </Text>
+          <Text style={styles.footerCountGreen}>
+            {teamB.name.toUpperCase()}: {selectedB.size}/11
+          </Text>
+        </View>
         <TouchableOpacity
-          style={[styles.startButton, !canStart && styles.startButtonDisabled]}
+          style={[styles.startButton, !canStart && styles.disabledBtn]}
           onPress={handleStartMatch}
           disabled={!canStart}
           activeOpacity={0.8}
@@ -200,7 +470,7 @@ export default function SelectRosterScreen({ teamA, teamB, onNext, onBack }: Pro
             <ActivityIndicator size="small" color={Colors.deepNavy} />
           ) : (
             <Text style={styles.startButtonText}>
-              Start Match ({selectedA.size} vs {selectedB.size})
+              START MATCH  {'\uD83C\uDFCF'}
             </Text>
           )}
         </TouchableOpacity>
@@ -208,90 +478,6 @@ export default function SelectRosterScreen({ teamA, teamB, onNext, onBack }: Pro
     </SafeAreaView>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Team Section Sub-component
-// ---------------------------------------------------------------------------
-
-function TeamSection({
-  teamName,
-  players,
-  selected,
-  onToggle,
-  onSelectAll,
-}: {
-  teamName: string;
-  players: PlayerDoc[];
-  selected: Set<string>;
-  onToggle: (id: string) => void;
-  onSelectAll: () => void;
-}) {
-  return (
-    <View>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{teamName.toUpperCase()}</Text>
-        <View style={styles.sectionRight}>
-          <Text style={styles.counter}>{selected.size}/11</Text>
-          {players.length > 0 && selected.size < players.length && (
-            <TouchableOpacity onPress={onSelectAll} activeOpacity={0.7}>
-              <Text style={styles.selectAllText}>Select All</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-
-      {players.length === 0 ? (
-        <Text style={styles.noPlayers}>No players registered</Text>
-      ) : (
-        players.map((player) => {
-          const isSelected = selected.has(player.id);
-          const badgeColor = roleBadgeColors[player.role];
-          return (
-            <TouchableOpacity
-              key={player.id}
-              style={[styles.playerRow, isSelected && styles.playerRowSelected]}
-              onPress={() => onToggle(player.id)}
-              activeOpacity={0.7}
-            >
-              {/* Checkbox */}
-              <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                {isSelected && <Text style={styles.checkmark}>✓</Text>}
-              </View>
-
-              {/* Avatar */}
-              <View style={styles.playerAvatar}>
-                <Text style={styles.playerInitial}>
-                  {player.name.charAt(0).toUpperCase()}
-                </Text>
-              </View>
-
-              {/* Info */}
-              <View style={styles.playerInfo}>
-                <Text style={[styles.playerName, isSelected && styles.playerNameSelected]}>
-                  {player.name}
-                </Text>
-                <Text style={styles.playerHand}>
-                  {player.hand === 'left' ? 'Left' : 'Right'}-handed
-                </Text>
-              </View>
-
-              {/* Role badge */}
-              <View style={[styles.roleBadge, { backgroundColor: badgeColor.bg }]}>
-                <Text style={[styles.roleBadgeText, { color: badgeColor.text }]}>
-                  {roleLabels[player.role]}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })
-      )}
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
   container: {
@@ -308,76 +494,143 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.sm,
     marginTop: Spacing.md,
   },
+
+  /* ── Header ── */
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.md,
+    paddingVertical: Spacing.md,
   },
-  backText: {
-    color: Colors.textSecondary,
-    fontSize: Typography.fontSize.sm,
-    marginBottom: Spacing.sm,
-  },
-  title: {
-    fontSize: Typography.fontSize.xs,
-    fontWeight: Typography.fontWeight.bold,
-    color: Colors.textSecondary,
-    letterSpacing: 2,
-    marginBottom: Spacing.xs,
-  },
-  subtitle: {
+  cancelText: {
     fontSize: Typography.fontSize.base,
+    color: Colors.white,
+  },
+  headerTitle: {
+    fontSize: Typography.fontSize.lg,
     fontWeight: Typography.fontWeight.bold,
     color: Colors.white,
   },
-  list: {
+
+  /* ── Step Indicator ── */
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  stepLabelActive: {
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.electricGreen,
+  },
+  stepLabel: {
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.gray500,
+  },
+  stepBarContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: Spacing.xs,
+  },
+  stepBar: {
+    flex: 1,
+    height: 4,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.gray700,
+  },
+  stepBarActive: {
+    backgroundColor: Colors.electricGreen,
+  },
+
+  /* ── Scroll ── */
+  scrollView: {
     flex: 1,
   },
-  listContent: {
+  scrollContent: {
     paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.lg,
+    paddingBottom: Spacing.xxl,
   },
-  sectionHeader: {
+
+  /* ── Playing XI Header ── */
+  xiHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
-    marginTop: Spacing.md,
+    marginBottom: Spacing.md,
   },
-  sectionTitle: {
+  xiTitle: {
+    fontSize: Typography.fontSize['2xl'],
+    fontWeight: Typography.fontWeight.extrabold,
+    color: Colors.white,
+  },
+  selectedBadge: {
+    backgroundColor: Colors.electricGreen + '1A',
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderWidth: 1,
+    borderColor: Colors.electricGreen + '4D',
+  },
+  selectedBadgeText: {
     fontSize: Typography.fontSize.xs,
     fontWeight: Typography.fontWeight.bold,
     color: Colors.electricGreen,
-    letterSpacing: 2,
   },
-  sectionRight: {
+
+  /* ── Tabs ── */
+  tabRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    marginBottom: Spacing.md,
+  },
+  tab: {
+    flex: 1,
+    paddingBottom: Spacing.sm,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabActive: {
+    borderBottomColor: Colors.electricGreen,
+  },
+  tabText: {
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.gray500,
+  },
+  tabTextActive: {
+    color: Colors.electricGreen,
+  },
+
+  /* ── Column Header ── */
+  colHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
-  counter: {
+  colText: {
     fontSize: Typography.fontSize.xs,
     fontWeight: Typography.fontWeight.bold,
-    color: Colors.textSecondary,
-  },
-  selectAllText: {
-    fontSize: Typography.fontSize.xs,
-    color: Colors.electricGreen,
-    fontWeight: Typography.fontWeight.semibold,
-  },
-  noPlayers: {
     color: Colors.gray500,
-    fontSize: Typography.fontSize.sm,
-    fontStyle: 'italic',
-    paddingVertical: Spacing.md,
+    letterSpacing: 1,
   },
+
+  /* ── Player Rows ── */
   playerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.gray800,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.sm + 2,
-    marginBottom: Spacing.xs + 2,
+    borderRadius: BorderRadius.xl,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    marginBottom: Spacing.sm,
     borderWidth: 1,
     borderColor: Colors.border,
   },
@@ -385,84 +638,197 @@ const styles = StyleSheet.create({
     borderColor: Colors.electricGreen + '4D',
     backgroundColor: Colors.electricGreen + '0D',
   },
+  playerNum: {
+    width: 24,
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.gray500,
+  },
+  playerInfo: {
+    flex: 1,
+    marginLeft: Spacing.sm,
+  },
+  playerName: {
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.white,
+  },
+  playerNameSelected: {
+    color: Colors.electricGreen,
+  },
+  playerBadges: {
+    flexDirection: 'row',
+    gap: Spacing.xs,
+    marginTop: 2,
+  },
+  roleBadge: {
+    backgroundColor: Colors.gray700,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.xs + 2,
+    paddingVertical: 1,
+  },
+  roleBadgeText: {
+    fontSize: 10,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.gray400,
+    letterSpacing: 0.5,
+  },
+  roleIcon: {
+    fontSize: Typography.fontSize.lg,
+    marginRight: Spacing.md,
+  },
+
+  /* ── Checkbox ── */
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: BorderRadius.sm + 2,
+    width: 24,
+    height: 24,
+    borderRadius: BorderRadius.md,
     borderWidth: 2,
     borderColor: Colors.gray600,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: Spacing.sm,
   },
   checkboxSelected: {
     backgroundColor: Colors.electricGreen,
     borderColor: Colors.electricGreen,
   },
   checkmark: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: Typography.fontWeight.bold,
     color: Colors.deepNavy,
   },
-  playerAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.gray700,
-    justifyContent: 'center',
+
+  /* ── Empty State ── */
+  emptyState: {
     alignItems: 'center',
-    marginRight: Spacing.sm,
+    paddingVertical: Spacing.xl,
   },
-  playerInitial: {
+  emptyText: {
+    color: Colors.textSecondary,
+    fontSize: Typography.fontSize.base,
+    marginBottom: Spacing.xs,
+  },
+  emptyHint: {
+    color: Colors.gray500,
     fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.bold,
+  },
+
+  /* ── Add Player Card ── */
+  addPlayerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: Colors.electricGreen + '4D',
+    borderStyle: 'dashed',
+    borderRadius: BorderRadius.xl,
+    paddingVertical: Spacing.md,
+    marginTop: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  addPlayerCardIcon: {
+    fontSize: Typography.fontSize.base,
+  },
+  addPlayerCardText: {
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.electricGreen,
+  },
+
+  /* ── Add Player Form ── */
+  addPlayerForm: {
+    backgroundColor: Colors.gray800,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.md,
+    marginTop: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.electricGreen + '4D',
+    gap: Spacing.sm,
+  },
+  addPlayerInput: {
+    backgroundColor: Colors.gray700,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    fontSize: Typography.fontSize.base,
+    color: Colors.white,
+  },
+  rolePickerRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  rolePickerBtn: {
+    flex: 1,
+    backgroundColor: Colors.gray700,
+    borderRadius: BorderRadius.lg,
+    paddingVertical: Spacing.sm,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  rolePickerBtnActive: {
+    borderColor: Colors.electricGreen,
+    backgroundColor: Colors.electricGreen + '1A',
+  },
+  rolePickerText: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semibold,
     color: Colors.gray400,
   },
-  playerInfo: {
-    flex: 1,
+  rolePickerTextActive: {
+    color: Colors.electricGreen,
   },
-  playerName: {
+  addPlayerActions: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  addPlayerCancelBtn: {
+    flex: 1,
+    backgroundColor: Colors.gray700,
+    borderRadius: BorderRadius.lg,
+    paddingVertical: Spacing.sm,
+    alignItems: 'center',
+  },
+  addPlayerCancelText: {
     fontSize: Typography.fontSize.sm,
     fontWeight: Typography.fontWeight.semibold,
     color: Colors.white,
   },
-  playerNameSelected: {
-    color: Colors.electricGreen,
-  },
-  playerHand: {
-    fontSize: Typography.fontSize.xs,
-    color: Colors.gray500,
-  },
-  roleBadge: {
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
-  },
-  roleBadgeText: {
-    fontSize: 10,
-    fontWeight: Typography.fontWeight.bold,
-    letterSpacing: 1,
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: Spacing.lg,
-  },
-  dividerLine: {
+  addPlayerSaveBtn: {
     flex: 1,
-    height: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: Colors.electricGreen,
+    borderRadius: BorderRadius.lg,
+    paddingVertical: Spacing.sm,
+    alignItems: 'center',
   },
-  dividerText: {
-    color: Colors.gray500,
-    fontSize: Typography.fontSize.xs,
-    marginHorizontal: Spacing.md,
+  addPlayerSaveText: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.deepNavy,
   },
+
+  /* ── Footer ── */
   footer: {
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
+  },
+  footerCounts: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.sm,
+  },
+  footerCountWhite: {
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.white,
+    letterSpacing: 0.5,
+  },
+  footerCountGreen: {
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.electricGreen,
+    letterSpacing: 0.5,
   },
   startButton: {
     backgroundColor: Colors.electricGreen,
@@ -470,12 +836,13 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     alignItems: 'center',
   },
-  startButtonDisabled: {
+  disabledBtn: {
     opacity: 0.4,
   },
   startButtonText: {
-    fontSize: Typography.fontSize.base,
-    fontWeight: Typography.fontWeight.bold,
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.extrabold,
     color: Colors.deepNavy,
+    letterSpacing: 1,
   },
 });

@@ -2,6 +2,15 @@ import { Innings } from './Innings';
 
 export type TossDecision = 'bat' | 'bowl';
 export type MatchStatus = 'upcoming' | 'live' | 'finished';
+export type MatchFormat = 't20' | 'odi' | 'test' | 'custom';
+
+export interface MatchConfig {
+  format: MatchFormat;
+  oversPerInnings: number;
+  venue: string;
+  scheduledDate: string;
+  tournament: string;
+}
 
 export interface Toss {
   winner: string; // team id

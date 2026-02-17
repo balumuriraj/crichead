@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { initializeFirebase } from '@crichead/core';
+import { initializeFirebase, type MatchConfig, type Toss } from '@crichead/core';
+import MatchDetailsScreen from './src/screens/MatchDetailsScreen';
 import SelectTeamsScreen, { type TeamInfo } from './src/screens/SelectTeamsScreen';
+import TossScreen from './src/screens/TossScreen';
 import SelectRosterScreen from './src/screens/SelectRosterScreen';
 import ScoringScreen from './src/screens/ScoringScreen';
 
@@ -16,19 +18,46 @@ initializeFirebase({
 });
 
 type AppScreen =
-  | { name: 'selectTeams' }
-  | { name: 'selectRoster'; teamA: TeamInfo; teamB: TeamInfo }
+  | { name: 'matchDetails' }
+  | { name: 'selectTeams'; config: MatchConfig }
+  | { name: 'toss'; config: MatchConfig; teamA: TeamInfo; teamB: TeamInfo }
+  | { name: 'selectRoster'; config: MatchConfig; teamA: TeamInfo; teamB: TeamInfo; toss: Toss }
   | { name: 'scoring'; matchId: string };
 
 export default function App() {
-  const [screen, setScreen] = useState<AppScreen>({ name: 'selectTeams' });
+  const [screen, setScreen] = useState<AppScreen>({ name: 'matchDetails' });
 
   return (
     <>
+      {screen.name === 'matchDetails' && (
+        <MatchDetailsScreen
+          onNext={(config) => setScreen({ name: 'selectTeams', config })}
+          onCancel={() => {}}
+        />
+      )}
       {screen.name === 'selectTeams' && (
         <SelectTeamsScreen
           onNext={(teamA, teamB) =>
-            setScreen({ name: 'selectRoster', teamA, teamB })
+            setScreen({ name: 'toss', config: screen.config, teamA, teamB })
+          }
+          onBack={() => setScreen({ name: 'matchDetails' })}
+        />
+      )}
+      {screen.name === 'toss' && (
+        <TossScreen
+          teamA={screen.teamA}
+          teamB={screen.teamB}
+          onNext={(toss) =>
+            setScreen({
+              name: 'selectRoster',
+              config: screen.config,
+              teamA: screen.teamA,
+              teamB: screen.teamB,
+              toss,
+            })
+          }
+          onBack={() =>
+            setScreen({ name: 'selectTeams', config: screen.config })
           }
         />
       )}
@@ -36,8 +65,17 @@ export default function App() {
         <SelectRosterScreen
           teamA={screen.teamA}
           teamB={screen.teamB}
+          toss={screen.toss}
+          config={screen.config}
           onNext={(matchId) => setScreen({ name: 'scoring', matchId })}
-          onBack={() => setScreen({ name: 'selectTeams' })}
+          onBack={() =>
+            setScreen({
+              name: 'toss',
+              config: screen.config,
+              teamA: screen.teamA,
+              teamB: screen.teamB,
+            })
+          }
         />
       )}
       {screen.name === 'scoring' && (

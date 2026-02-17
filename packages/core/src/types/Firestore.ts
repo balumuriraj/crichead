@@ -25,6 +25,8 @@ export interface FirestoreMatchDoc {
   currentInningsIndex: number;
   innings: FirestoreInningsSummary[];
   playingXI?: Record<string, PlayingXIEntry[]>;
+  oversPerInnings?: number;
+  playersPerSide?: number;
 }
 
 export interface FirestoreBallDoc extends Ball {

@@ -220,7 +220,56 @@ export function useMatchSync(
             ballCount: newBallCount,
           };
 
-          transaction.update(matchDocRef, { innings: updatedInnings });
+          // Check if innings should end
+          const maxOvers = matchData.oversPerInnings ?? 0; // 0 = unlimited (test)
+          const maxWickets = (matchData.playersPerSide ?? 11) - 1;
+
+          const { currentOver: newOver, currentBall: newBall } =
+            parseOvers(newOvers);
+          const allOversCompleted =
+            maxOvers > 0 && newOver >= maxOvers && newBall === 0;
+          const allOut = newTotalWickets >= maxWickets;
+          const inningsEnded = allOversCompleted || allOut;
+
+          const updatePayload: Record<string, unknown> = {
+            innings: updatedInnings,
+          };
+
+          if (inningsEnded) {
+            const isFirstInnings = inningsIndex === 0;
+            if (isFirstInnings) {
+              // Transition to second innings
+              const secondBattingTeamId =
+                currentInnings.teamId === matchData.teamA
+                  ? matchData.teamB
+                  : matchData.teamA;
+
+              updatedInnings.push({
+                teamId: secondBattingTeamId,
+                totalRuns: 0,
+                totalWickets: 0,
+                overs: 0,
+                ballCount: 0,
+              });
+
+              updatePayload.innings = updatedInnings;
+              updatePayload.currentInningsIndex = 1;
+            } else {
+              // Second innings ended — match is finished
+              updatePayload.status = 'finished';
+            }
+          }
+
+          // Check if chasing team has exceeded target (second innings only)
+          if (inningsIndex === 1 && !inningsEnded) {
+            const firstInningsRuns = matchData.innings[0]?.totalRuns ?? 0;
+            if (newTotalRuns > firstInningsRuns) {
+              // Chasing team wins — match finished
+              updatePayload.status = 'finished';
+            }
+          }
+
+          transaction.update(matchDocRef, updatePayload);
         });
       } catch (err) {
         const txError =
