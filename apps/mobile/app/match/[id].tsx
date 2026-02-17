@@ -102,5 +102,10 @@ export default function MatchScreen() {
     );
   }
 
-  return <ScoringScreen matchId={current.matchId} />;
+  return (
+    <ScoringScreen
+      matchId={current.matchId}
+      onBack={() => router.back()}
+    />
+  );
 }
