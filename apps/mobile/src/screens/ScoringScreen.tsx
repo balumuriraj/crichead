@@ -22,9 +22,7 @@ import {
   calculateInningsStats,
   formatOvers,
   calculateRunRate,
-  parseOvers,
   type Ball,
-  type FirestoreInningsSummary,
 } from '@crichead/core';
 
 // ---------------------------------------------------------------------------
@@ -76,44 +74,6 @@ const generateDemoData = (): Ball[] => [
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function inningsSummaryToStats(summary: FirestoreInningsSummary) {
-  const { currentOver, currentBall } = parseOvers(summary.overs);
-  return {
-    totalRuns: summary.totalRuns,
-    totalWickets: summary.totalWickets,
-    currentOver,
-    currentBall,
-    ballsInOver: 6,
-  };
-}
-
-function applyOptimisticBall(
-  summary: FirestoreInningsSummary,
-  ball: Ball
-): FirestoreInningsSummary {
-  const newTotalRuns = summary.totalRuns + ball.runs + (ball.extras?.runs ?? 0);
-  const newTotalWickets = summary.totalWickets + (ball.wicket ? 1 : 0);
-  const newBallCount = summary.ballCount + 1;
-
-  const isValidDelivery =
-    !ball.extras || (ball.extras.type !== 'wd' && ball.extras.type !== 'nb');
-
-  let newOvers = summary.overs;
-  if (isValidDelivery) {
-    const { currentOver, currentBall } = parseOvers(summary.overs);
-    const totalValid = currentOver * 6 + currentBall + 1;
-    newOvers = parseFloat(`${Math.floor(totalValid / 6)}.${totalValid % 6}`);
-  }
-
-  return {
-    ...summary,
-    totalRuns: newTotalRuns,
-    totalWickets: newTotalWickets,
-    overs: newOvers,
-    ballCount: newBallCount,
-  };
-}
 
 function formatBallDisplay(ball: Ball): string {
   if (ball.wicket) return 'W';
@@ -194,26 +154,26 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
 
   const isLiveMode = matchId !== null;
 
+  // ---- Reconcile optimistic balls ----
+  // Ref must be declared before `balls` useMemo so it can read the
+  // previous firestore count to compute the overlap.
+  const prevFirestoreLenRef = useRef(firestoreBalls.length);
+
   // ---- Derived state ----
   const balls = useMemo(() => {
     if (!isLiveMode) return localBalls;
-    return [...firestoreBalls, ...optimisticBalls];
+    // Firestore ball listener may deliver confirmed balls BEFORE the
+    // reconciliation effect removes them from optimisticBalls.  During
+    // that window the same ball exists in both arrays.  Compute the
+    // overlap so we never double-count.
+    const newlyConfirmed = Math.max(0, firestoreBalls.length - prevFirestoreLenRef.current);
+    const pendingOptimistic = optimisticBalls.slice(newlyConfirmed);
+    return [...firestoreBalls, ...pendingOptimistic];
   }, [isLiveMode, localBalls, firestoreBalls, optimisticBalls]);
 
-  const stats = useMemo(() => {
-    if (!isLiveMode) {
-      return calculateInningsStats(localBalls);
-    }
-    const currentInnings = match?.innings[match.currentInningsIndex];
-    if (!currentInnings) {
-      return { totalRuns: 0, totalWickets: 0, currentOver: 0, currentBall: 0, ballsInOver: 6 };
-    }
-    let summary = currentInnings;
-    for (const ball of optimisticBalls) {
-      summary = applyOptimisticBall(summary, ball);
-    }
-    return inningsSummaryToStats(summary);
-  }, [isLiveMode, localBalls, match, optimisticBalls]);
+  // Single source of truth: always derived from the deduped `balls` array
+  // so display and detection can never disagree.
+  const stats = useMemo(() => calculateInningsStats(balls), [balls]);
 
   const currentOverFormatted = formatOvers(stats.currentOver, stats.currentBall);
   const runRate = calculateRunRate(stats.totalRuns, stats.currentOver, stats.currentBall);
@@ -322,13 +282,35 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
 
   useEffect(() => {
     const prevLen = prevBallsLenRef.current;
+
+    // Handle reset (balls.length decreased) — sync refs to new state
+    if (balls.length < prevLen) {
+      console.log('[OVER-DETECT] RESET: balls', balls.length, 'prevLen', prevLen);
+      prevBallsLenRef.current = balls.length;
+      prevOverRef.current = stats.currentOver;
+      prevWicketsRef.current = stats.totalWickets;
+      return;
+    }
+
+    // No new ball added
+    if (balls.length === prevLen) return;
+
+    // New ball added — compare against previous refs
     const prevOver = prevOverRef.current;
     const prevWickets = prevWicketsRef.current;
 
-    // Only react to NEW balls being added
-    if (balls.length <= prevLen) return;
+    console.log('[OVER-DETECT] NEW BALL:', {
+      ballsLen: balls.length,
+      prevLen,
+      currentOver: stats.currentOver,
+      currentBall: stats.currentBall,
+      prevOver,
+      totalWickets: stats.totalWickets,
+      prevWickets,
+      overChanged: stats.currentOver > prevOver,
+      wicketFell: stats.totalWickets > prevWickets,
+    });
 
-    // Update refs AFTER the guard — so extraneous firings don't corrupt tracking
     prevBallsLenRef.current = balls.length;
     prevOverRef.current = stats.currentOver;
     prevWicketsRef.current = stats.totalWickets;
@@ -337,25 +319,24 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
     const wicketFell = stats.totalWickets > prevWickets;
 
     if (wicketFell && overChanged) {
-      // Wicket on the last ball of the over — need both new batsman AND new bowler
+      console.log('[OVER-DETECT] >>> WICKET + OVER CHANGE');
       setStrikerId(null);
       setBowlerId(null);
       setTimeout(() => setPickerMode('striker'), 300);
     } else if (wicketFell) {
-      // Wicket mid-over — need new batsman
+      console.log('[OVER-DETECT] >>> WICKET');
       setStrikerId(null);
       setTimeout(() => setPickerMode('striker'), 300);
     } else if (overChanged) {
-      // Over completed — swap ends and need new bowler
+      console.log('[OVER-DETECT] >>> OVER CHANGE — showing bowler picker');
       setStrikerId(nonStrikerIdRef.current);
       setNonStrikerId(strikerIdRef.current);
       setBowlerId(null);
       setTimeout(() => setPickerMode('bowler'), 300);
     }
-  }, [balls.length, stats.currentOver, stats.totalWickets]);
+  }, [balls.length, stats]);
 
-  // ---- Reconcile optimistic balls ----
-  const prevFirestoreLenRef = useRef(firestoreBalls.length);
+  // ---- Reconcile optimistic balls (state cleanup) ----
   useEffect(() => {
     if (firestoreBalls.length > prevFirestoreLenRef.current) {
       const newBallsCount = firestoreBalls.length - prevFirestoreLenRef.current;
