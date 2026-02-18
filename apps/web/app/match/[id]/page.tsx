@@ -7,6 +7,8 @@ import {
   parseOvers,
   calculateRunRate,
   formatOvers,
+  formatBallDisplay,
+  splitBallsIntoOvers,
   type Ball,
   type FirestoreInningsSummary,
 } from '@crichead/core';
@@ -15,15 +17,6 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getBallDisplay(ball: Ball): string {
-  if (ball.wicket) return 'W';
-  if (ball.extras?.type === 'wd') return 'WD';
-  if (ball.extras?.type === 'nb') return 'NB';
-  if (ball.extras?.type === 'b') return `${ball.extras.runs}b`;
-  if (ball.extras?.type === 'lb') return `${ball.extras.runs}lb`;
-  return ball.runs.toString();
-}
-
 function getBallColor(ball: Ball): string {
   if (ball.wicket) return 'bg-red-500 text-white';
   if (ball.runs === 4 && !ball.extras) return 'bg-[#00FF41] text-[#0F172A]';
@@ -31,24 +24,6 @@ function getBallColor(ball: Ball): string {
   if (ball.extras) return 'bg-amber-600 text-white';
   if (ball.runs === 0) return 'bg-[#334155] text-gray-400';
   return 'bg-[#334155] text-white';
-}
-
-function splitBallsIntoOvers(balls: Ball[]): Ball[][] {
-  const overs: Ball[][] = [];
-  let currentOver: Ball[] = [];
-  let validBallCount = 0;
-  for (const ball of balls) {
-    currentOver.push(ball);
-    const isExtra = ball.extras?.type === 'wd' || ball.extras?.type === 'nb';
-    if (!isExtra) validBallCount++;
-    if (validBallCount === 6) {
-      overs.push(currentOver);
-      currentOver = [];
-      validBallCount = 0;
-    }
-  }
-  if (currentOver.length > 0) overs.push(currentOver);
-  return overs;
 }
 
 function getStatsFromSummary(summary: FirestoreInningsSummary) {
@@ -244,7 +219,7 @@ export default function MatchPage() {
                           className={`w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold transition-transform hover:scale-110 cursor-default ${getBallColor(ball)}`}
                           title={ball.commentary ?? ''}
                         >
-                          {getBallDisplay(ball)}
+                          {formatBallDisplay(ball)}
                         </div>
                       ))}
                     </div>
@@ -276,7 +251,7 @@ export default function MatchPage() {
                     <div
                       className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${getBallColor(ball)}`}
                     >
-                      {getBallDisplay(ball)}
+                      {formatBallDisplay(ball)}
                     </div>
                     <p className="text-sm text-gray-300">{ball.commentary}</p>
                   </div>

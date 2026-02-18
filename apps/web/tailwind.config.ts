@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss'
+import { Colors } from '@crichead/core'
 
 const config: Config = {
   content: [
@@ -10,10 +11,10 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        'electric-green': '#00FF41',
-        'deep-navy': '#0F172A',
-        'navy-800': '#1E293B',
-        'navy-700': '#334155',
+        'electric-green': Colors.electricGreen,
+        'deep-navy': Colors.deepNavy,
+        'navy-800': Colors.gray800,
+        'navy-700': Colors.gray700,
       },
     },
   },

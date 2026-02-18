@@ -4,6 +4,9 @@ export * from './types';
 // Export all utilities
 export * from './utils';
 
+// Export design tokens
+export * from './tokens';
+
 // Export Firebase client-side utilities
 export * from './firebase';
 

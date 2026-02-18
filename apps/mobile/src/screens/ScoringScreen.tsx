@@ -22,6 +22,9 @@ import {
   calculateInningsStats,
   formatOvers,
   calculateRunRate,
+  formatBallDisplay,
+  computeBatsmenStats,
+  computeBowlerStats,
   type Ball,
 } from '@crichead/core';
 
@@ -71,47 +74,7 @@ const generateDemoData = (): Ball[] => [
   { bowlerId: 'bowl2', strikerId: 'bat3', runs: 1, extras: null, wicket: null, commentary: 'Single to end the over' },
 ];
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function formatBallDisplay(ball: Ball): string {
-  if (ball.wicket) return 'W';
-  if (ball.extras?.type === 'wd') return 'WD';
-  if (ball.extras?.type === 'nb') return 'NB';
-  if (ball.extras?.type === 'b') return `${ball.extras.runs}b`;
-  if (ball.extras?.type === 'lb') return `${ball.extras.runs}lb`;
-  return ball.runs.toString();
-}
-
-function computeBatsmenStats(balls: Ball[]) {
-  const map = new Map<string, { runs: number; balls: number }>();
-  for (const b of balls) {
-    const id = b.strikerId;
-    if (!map.has(id)) map.set(id, { runs: 0, balls: 0 });
-    const entry = map.get(id)!;
-    const isValidDelivery = !b.extras || (b.extras.type !== 'wd');
-    if (isValidDelivery) {
-      entry.balls += 1;
-      entry.runs += b.runs;
-    }
-  }
-  return map;
-}
-
-function computeBowlerStats(balls: Ball[]) {
-  const map = new Map<string, { runs: number; wickets: number; validBalls: number }>();
-  for (const b of balls) {
-    const id = b.bowlerId;
-    if (!map.has(id)) map.set(id, { runs: 0, wickets: 0, validBalls: 0 });
-    const entry = map.get(id)!;
-    entry.runs += b.runs + (b.extras?.runs ?? 0);
-    if (b.wicket) entry.wickets += 1;
-    const isValidDelivery = !b.extras || (b.extras.type !== 'wd' && b.extras.type !== 'nb');
-    if (isValidDelivery) entry.validBalls += 1;
-  }
-  return map;
-}
+// Helpers (formatBallDisplay, computeBatsmenStats, computeBowlerStats) imported from @crichead/core
 
 type TabKey = 'comm' | 'players' | 'cards';
 type PickerMode = 'striker' | 'nonStriker' | 'bowler' | null;
