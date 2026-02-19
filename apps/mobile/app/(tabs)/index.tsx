@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,8 +10,9 @@ import {
   Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { Calendar, ChevronRight, Play, ChevronDown, Zap } from 'lucide-react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { Calendar, ChevronRight, Play, ChevronDown, Zap, Smartphone } from 'lucide-react-native';
+import { listLocalMatches, type LocalMatchRecord } from '../../src/utils/localMatchStore';
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
 import { getFirebaseDb } from '@crichead/core';
@@ -29,6 +30,13 @@ export default function HomeScreen() {
   const [matches, setMatches] = useState<MatchDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [localMatches, setLocalMatches] = useState<LocalMatchRecord[]>([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      listLocalMatches().then(setLocalMatches);
+    }, []),
+  );
 
   useEffect(() => {
     const db = getFirebaseDb();
@@ -148,6 +156,34 @@ export default function HomeScreen() {
                   <Text style={styles.matchStatus}>In Progress</Text>
                 </View>
                 <ChevronRight size={18} color={Colors.electricGreen} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Local Matches */}
+        {localMatches.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Smartphone size={14} color={Colors.gray500} />
+              <Text style={styles.sectionTitle}>LOCAL MATCHES</Text>
+            </View>
+            {localMatches.map((m) => (
+              <TouchableOpacity
+                key={m.id}
+                style={styles.matchCard}
+                onPress={() => router.push(`/match/local-${m.id}`)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.matchInfo}>
+                  <Text style={styles.matchTeams}>
+                    {m.config.teamAName} vs {m.config.teamBName}
+                  </Text>
+                  <Text style={styles.matchStatus}>
+                    Local · {m.config.oversPerInnings} overs
+                  </Text>
+                </View>
+                <ChevronRight size={18} color={Colors.gray500} />
               </TouchableOpacity>
             ))}
           </View>

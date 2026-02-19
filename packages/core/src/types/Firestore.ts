@@ -29,6 +29,9 @@ export interface FirestoreMatchDoc {
   playingXI?: Record<string, PlayingXIEntry[]>;
   oversPerInnings?: number;
   playersPerSide?: number;
+  currentStrikerId?: string | null;
+  currentNonStrikerId?: string | null;
+  currentBowlerId?: string | null;
 }
 
 export interface FirestoreBallDoc extends Ball {

@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  Switch,
   TouchableOpacity,
   SafeAreaView,
   ActivityIndicator,
@@ -13,6 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
 import { getFirebaseDb, type TossDecision, type PlayerRole } from '@crichead/core';
 import { addDoc, collection } from 'firebase/firestore';
+import type { QuickMatchConfig } from '../types/QuickMatchConfig';
 
 /* ── Temporary data ── */
 
@@ -45,7 +47,7 @@ const OVERS_PRESETS = [5, 10, 15, 20];
 /* ── Component ── */
 
 interface Props {
-  onMatchCreated: (matchId: string) => void;
+  onMatchCreated: (matchId: string | null, config: QuickMatchConfig) => void;
   onCancel: () => void;
 }
 
@@ -54,6 +56,7 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
   const [playersPerSide, setPlayersPerSide] = useState(11);
   const [tossWinner, setTossWinner] = useState<string | null>(null);
   const [tossDecision, setTossDecision] = useState<TossDecision | null>(null);
+  const [liveMode, setLiveMode] = useState(true);
   const [creating, setCreating] = useState(false);
 
   const homePlayers = makePlayers('Home', playersPerSide);
@@ -79,8 +82,6 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
     try {
-      const db = getFirebaseDb();
-
       const battingFirstId =
         tossDecision === 'bat'
           ? tossWinner
@@ -88,42 +89,34 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
             ? AWAY_TEAM.id
             : HOME_TEAM.id;
 
-      const matchDoc = {
+      const config: QuickMatchConfig = {
         teamA: HOME_TEAM.id,
-        teamB: AWAY_TEAM.id,
         teamAName: HOME_TEAM.name,
+        teamB: AWAY_TEAM.id,
         teamBName: AWAY_TEAM.name,
         toss: { winner: tossWinner, decision: tossDecision },
-        status: 'live' as const,
-        currentInningsIndex: 0,
-        innings: [
-          {
-            teamId: battingFirstId,
-            totalRuns: 0,
-            totalWickets: 0,
-            overs: 0,
-            ballCount: 0,
-          },
-        ],
         playingXI: {
-          [HOME_TEAM.id]: homePlayers.map((p) => ({
-            id: p.id,
-            name: p.name,
-            role: p.role,
-          })),
-          [AWAY_TEAM.id]: awayPlayers.map((p) => ({
-            id: p.id,
-            name: p.name,
-            role: p.role,
-          })),
+          [HOME_TEAM.id]: homePlayers.map((p) => ({ id: p.id, name: p.name, role: p.role })),
+          [AWAY_TEAM.id]: awayPlayers.map((p) => ({ id: p.id, name: p.name, role: p.role })),
         },
         oversPerInnings: overs,
-        playersPerSide: playersPerSide,
-        quickMatch: true,
+        playersPerSide,
       };
 
-      const ref = await addDoc(collection(db, 'matches'), matchDoc);
-      onMatchCreated(ref.id);
+      if (liveMode) {
+        const db = getFirebaseDb();
+        const matchDoc = {
+          ...config,
+          status: 'live' as const,
+          currentInningsIndex: 0,
+          innings: [{ teamId: battingFirstId, totalRuns: 0, totalWickets: 0, overs: 0, ballCount: 0 }],
+          quickMatch: true,
+        };
+        const ref = await addDoc(collection(db, 'matches'), matchDoc);
+        onMatchCreated(ref.id, config);
+      } else {
+        onMatchCreated(null, config);
+      }
     } catch (err) {
       Alert.alert(
         'Error',
@@ -253,6 +246,20 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
                 <Text style={styles.stepperBtnText}>+</Text>
               </TouchableOpacity>
             </View>
+          </View>
+
+          {/* Live Mode toggle */}
+          <View style={styles.settingRow}>
+            <View style={styles.settingLabelGroup}>
+              <Text style={styles.settingLabel}>Live Mode</Text>
+              <Text style={styles.settingSubLabel}>Sync scores to Firebase</Text>
+            </View>
+            <Switch
+              value={liveMode}
+              onValueChange={setLiveMode}
+              trackColor={{ false: Colors.gray700, true: Colors.electricGreen + '80' }}
+              thumbColor={liveMode ? Colors.electricGreen : Colors.gray500}
+            />
           </View>
         </View>
 
@@ -525,6 +532,14 @@ const styles = StyleSheet.create({
   settingLabel: {
     fontSize: Typography.fontSize.base,
     color: Colors.white,
+  },
+  settingLabelGroup: {
+    flex: 1,
+  },
+  settingSubLabel: {
+    fontSize: Typography.fontSize.xs,
+    color: Colors.gray500,
+    marginTop: 2,
   },
   stepper: {
     flexDirection: 'row',

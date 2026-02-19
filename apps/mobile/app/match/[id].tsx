@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { MatchConfig, Toss } from '@crichead/core';
+import type { QuickMatchConfig } from '../src/types/QuickMatchConfig';
 import MatchDetailsScreen from '../../src/screens/MatchDetailsScreen';
 import SelectTeamsScreen, { type TeamInfo } from '../../src/screens/SelectTeamsScreen';
 import TossScreen from '../../src/screens/TossScreen';
@@ -14,7 +15,7 @@ type MatchStep =
   | { step: 'toss'; config: MatchConfig; teamA: TeamInfo; teamB: TeamInfo }
   | { step: 'selectRoster'; config: MatchConfig; teamA: TeamInfo; teamB: TeamInfo; toss: Toss }
   | { step: 'quickMatch' }
-  | { step: 'scoring'; matchId: string };
+  | { step: 'scoring'; matchId: string | null; config?: QuickMatchConfig; initialLocalMatchId?: string };
 
 export default function MatchScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -25,14 +26,16 @@ export default function MatchScreen() {
       ? { step: 'matchDetails' }
       : id === 'quick'
         ? { step: 'quickMatch' }
-        : { step: 'scoring', matchId: id! };
+        : id.startsWith('local-')
+          ? { step: 'scoring', matchId: null, initialLocalMatchId: id.replace('local-', '') }
+          : { step: 'scoring', matchId: id! };
 
   const [current, setCurrent] = useState<MatchStep>(initialStep);
 
   if (current.step === 'quickMatch') {
     return (
       <QuickMatchScreen
-        onMatchCreated={(matchId) => setCurrent({ step: 'scoring', matchId })}
+        onMatchCreated={(matchId, config) => setCurrent({ step: 'scoring', matchId, config })}
         onCancel={() => router.back()}
       />
     );
@@ -105,6 +108,8 @@ export default function MatchScreen() {
   return (
     <ScoringScreen
       matchId={current.matchId}
+      config={current.config}
+      initialLocalMatchId={current.initialLocalMatchId}
       onBack={() => router.back()}
     />
   );

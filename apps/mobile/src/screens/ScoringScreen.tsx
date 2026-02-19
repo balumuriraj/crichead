@@ -17,7 +17,7 @@ import {
   Typography,
   type ExtraType,
 } from '@crichead/ui/mobile';
-import { Plus, User } from 'lucide-react-native';
+import { Plus } from 'lucide-react-native';
 import {
   useMatchSync,
   calculateInningsStats,
@@ -26,12 +26,19 @@ import {
   formatBallDisplay,
   computeBatsmenStats,
   computeBowlerStats,
+  getFirebaseDb,
   type Ball,
 } from '@crichead/core';
+import { addDoc, collection, updateDoc, doc } from 'firebase/firestore';
+import type { QuickMatchConfig } from '../types/QuickMatchConfig';
+import {
+  generateLocalId,
+  saveLocalMatch,
+  loadLocalMatch,
+} from '../utils/localMatchStore';
 
-// ---------------------------------------------------------------------------
-// Demo data
-// ---------------------------------------------------------------------------
+type TabKey = 'comm' | 'players' | 'cards';
+type PickerMode = 'striker' | 'nonStriker' | 'bowler' | null;
 
 interface PlayerInfo {
   id: string;
@@ -39,57 +46,25 @@ interface PlayerInfo {
   role: 'bat' | 'bowl' | 'all';
 }
 
-const DEMO_BATSMEN: PlayerInfo[] = [
-  { id: 'bat1', name: 'Virat Kohli', role: 'bat' },
-  { id: 'bat2', name: 'Rohit Sharma', role: 'bat' },
-  { id: 'bat3', name: 'Hardik Pandya', role: 'all' },
-  { id: 'bat4', name: 'KL Rahul', role: 'bat' },
-  { id: 'bat5', name: 'Suryakumar Yadav', role: 'bat' },
-  { id: 'bat6', name: 'Rishabh Pant', role: 'bat' },
-  { id: 'bat7', name: 'Ravindra Jadeja', role: 'all' },
-];
-
-const DEMO_BOWLERS: PlayerInfo[] = [
-  { id: 'bowl1', name: 'Jasprit Bumrah', role: 'bowl' },
-  { id: 'bowl2', name: 'Mohammed Shami', role: 'bowl' },
-  { id: 'bowl3', name: 'Ravichandran Ashwin', role: 'bowl' },
-  { id: 'bowl4', name: 'Kuldeep Yadav', role: 'bowl' },
-  { id: 'bat3', name: 'Hardik Pandya', role: 'all' },
-  { id: 'bat7', name: 'Ravindra Jadeja', role: 'all' },
-];
-
-const generateDemoData = (): Ball[] => [
-  { bowlerId: 'bowl1', strikerId: 'bat1', runs: 0, extras: null, wicket: null, commentary: 'Dot ball' },
-  { bowlerId: 'bowl1', strikerId: 'bat1', runs: 1, extras: null, wicket: null, commentary: 'Single run' },
-  { bowlerId: 'bowl1', strikerId: 'bat2', runs: 4, extras: null, wicket: null, commentary: 'FOUR! Beautiful cover drive' },
-  { bowlerId: 'bowl1', strikerId: 'bat2', runs: 0, extras: null, wicket: null, commentary: 'Dot ball' },
-  { bowlerId: 'bowl1', strikerId: 'bat2', runs: 0, extras: { type: 'wd', runs: 1 }, wicket: null, commentary: 'Wide down the leg side' },
-  { bowlerId: 'bowl1', strikerId: 'bat2', runs: 2, extras: null, wicket: null, commentary: 'Two runs taken' },
-  { bowlerId: 'bowl1', strikerId: 'bat2', runs: 0, extras: null, wicket: { type: 'caught', fielderId: 'fielder1' }, commentary: 'WICKET! Caught at mid-off' },
-  { bowlerId: 'bowl2', strikerId: 'bat3', runs: 1, extras: null, wicket: null, commentary: 'Single run' },
-  { bowlerId: 'bowl2', strikerId: 'bat1', runs: 6, extras: null, wicket: null, commentary: 'SIX! Massive hit over long-on!' },
-  { bowlerId: 'bowl2', strikerId: 'bat1', runs: 0, extras: null, wicket: null, commentary: 'Dot ball' },
-  { bowlerId: 'bowl2', strikerId: 'bat1', runs: 1, extras: { type: 'nb', runs: 1 }, wicket: null, commentary: 'No ball! Plus 1 run' },
-  { bowlerId: 'bowl2', strikerId: 'bat3', runs: 0, extras: { type: 'b', runs: 2 }, wicket: null, commentary: 'Byes! 2 runs' },
-  { bowlerId: 'bowl2', strikerId: 'bat3', runs: 4, extras: null, wicket: null, commentary: 'FOUR! Glorious shot through covers' },
-  { bowlerId: 'bowl2', strikerId: 'bat3', runs: 1, extras: null, wicket: null, commentary: 'Single to end the over' },
-];
-
-// Helpers (formatBallDisplay, computeBatsmenStats, computeBowlerStats) imported from @crichead/core
-
-type TabKey = 'comm' | 'players' | 'cards';
-type PickerMode = 'striker' | 'nonStriker' | 'bowler' | null;
-
 // ---------------------------------------------------------------------------
 // ScoringScreen
 // ---------------------------------------------------------------------------
 
 interface ScoringScreenProps {
   matchId?: string | null;
+  config?: QuickMatchConfig;
+  initialLocalMatchId?: string;
   onBack?: () => void;
 }
 
-export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenProps) {
+export default function ScoringScreen({
+  matchId = null,
+  config,
+  initialLocalMatchId,
+  onBack,
+}: ScoringScreenProps) {
+  const [liveMatchId, setLiveMatchId] = useState<string | null>(matchId);
+
   // ---- Firebase sync ----
   const {
     match,
@@ -97,12 +72,14 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
     loading: syncLoading,
     error: syncError,
     addBallToMatch,
-  } = useMatchSync(matchId, { subscribeToBalls: true });
+  } = useMatchSync(liveMatchId, { subscribeToBalls: true });
 
-  // ---- Local / demo state ----
-  const [localBalls, setLocalBalls] = useState<Ball[]>(generateDemoData());
-  const [isDemoMode, setIsDemoMode] = useState(true);
-  const [teamName] = useState('India');
+  // ---- Local state ----
+  const [localBalls, setLocalBalls] = useState<Ball[]>([]);
+
+  // ---- Resolved config (from prop for new local matches, from AsyncStorage for resumes) ----
+  const [resolvedConfig, setResolvedConfig] = useState<QuickMatchConfig | undefined>(config);
+  const [localLoading, setLocalLoading] = useState(!!initialLocalMatchId);
 
   // ---- Optimistic updates ----
   const [optimisticBalls, setOptimisticBalls] = useState<Ball[]>([]);
@@ -116,34 +93,44 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
   // ---- Tab state ----
   const [activeTab, setActiveTab] = useState<TabKey>('players');
 
-  const isLiveMode = matchId !== null;
+  const isLiveMode = liveMatchId !== null;
+
+  // ---- Stable local match ID for this session ----
+  const localMatchIdRef = useRef<string>(initialLocalMatchId ?? generateLocalId());
+
+  // ---- Load from AsyncStorage when resuming a local match ----
+  useEffect(() => {
+    if (!initialLocalMatchId) return;
+    loadLocalMatch(initialLocalMatchId).then((record) => {
+      if (record) {
+        setResolvedConfig(record.config);
+        setLocalBalls(record.balls);
+        setStrikerId(record.strikerId);
+        setNonStrikerId(record.nonStrikerId);
+        setBowlerId(record.bowlerId);
+      }
+      setLocalLoading(false);
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- Reconcile optimistic balls ----
-  // Ref must be declared before `balls` useMemo so it can read the
-  // previous firestore count to compute the overlap.
   const prevFirestoreLenRef = useRef(firestoreBalls.length);
 
   // ---- Derived state ----
   const balls = useMemo(() => {
     if (!isLiveMode) return localBalls;
-    // Firestore ball listener may deliver confirmed balls BEFORE the
-    // reconciliation effect removes them from optimisticBalls.  During
-    // that window the same ball exists in both arrays.  Compute the
-    // overlap so we never double-count.
     const newlyConfirmed = Math.max(0, firestoreBalls.length - prevFirestoreLenRef.current);
     const pendingOptimistic = optimisticBalls.slice(newlyConfirmed);
     return [...firestoreBalls, ...pendingOptimistic];
   }, [isLiveMode, localBalls, firestoreBalls, optimisticBalls]);
 
-  // Single source of truth: always derived from the deduped `balls` array
-  // so display and detection can never disagree.
   const stats = useMemo(() => calculateInningsStats(balls), [balls]);
 
   const currentOverFormatted = formatOvers(stats.currentOver, stats.currentBall);
   const runRate = calculateRunRate(stats.totalRuns, stats.currentOver, stats.currentBall);
 
-  const maxOvers = match?.oversPerInnings ?? 0;
-  const maxWickets = (match?.playersPerSide ?? 11) - 1;
+  const maxOvers = match?.oversPerInnings ?? resolvedConfig?.oversPerInnings ?? 0;
+  const maxWickets = (match?.playersPerSide ?? resolvedConfig?.playersPerSide ?? 11) - 1;
   const matchStatus = match?.status ?? 'live';
   const currentInningsIndex = match?.currentInningsIndex ?? 0;
 
@@ -151,43 +138,54 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
     maxOvers > 0 && stats.currentOver >= maxOvers && stats.currentBall === 0;
   const allOut = stats.totalWickets >= maxWickets;
   const isMatchFinished = matchStatus === 'finished';
-  const isInningsComplete = allOversCompleted || allOut || isMatchFinished;
-  const scoringDisabled = isLiveMode && isInningsComplete;
+  const isInningsComplete = allOversCompleted || allOut || (isLiveMode && isMatchFinished);
+  const scoringDisabled = isInningsComplete;
 
   const firstInningsRuns =
     match && match.innings.length > 1 ? match.innings[0].totalRuns : null;
   const isChasing = currentInningsIndex === 1 && firstInningsRuns !== null;
 
-  // Players need to be selected before scoring can begin
   const playersReady = strikerId !== null && nonStrikerId !== null && bowlerId !== null;
   const inputDisabled = scoringDisabled || !playersReady || pickerMode !== null;
 
-  // ---- Available players for picker ----
-  const battingTeamId = isLiveMode ? (match?.innings[currentInningsIndex]?.teamId ?? null) : null;
-  const bowlingTeamId = isLiveMode && battingTeamId
-    ? (match?.teamA === battingTeamId ? match?.teamB : match?.teamA) ?? null
-    : null;
+  // ---- Batting/bowling team IDs ----
+  const battingTeamId: string | null = isLiveMode
+    ? (match?.innings[currentInningsIndex]?.teamId ?? null)
+    : resolvedConfig
+      ? (resolvedConfig.toss.decision === 'bat'
+          ? resolvedConfig.toss.winner
+          : resolvedConfig.toss.winner === resolvedConfig.teamA
+            ? resolvedConfig.teamB
+            : resolvedConfig.teamA)
+      : null;
+
+  const bowlingTeamId: string | null =
+    battingTeamId && resolvedConfig
+      ? (battingTeamId === resolvedConfig.teamA ? resolvedConfig.teamB : resolvedConfig.teamA)
+      : isLiveMode && battingTeamId && match
+        ? (match.teamA === battingTeamId ? match.teamB : match.teamA)
+        : null;
 
   const battingTeamPlayers = useMemo((): PlayerInfo[] => {
-    if (!isLiveMode) return DEMO_BATSMEN;
-    if (!match?.playingXI || !battingTeamId) return [];
-    return (match.playingXI[battingTeamId] ?? []).map((p) => ({ id: p.id, name: p.name, role: p.role }));
-  }, [isLiveMode, match, battingTeamId]);
+    if (!battingTeamId) return [];
+    const xi = isLiveMode ? match?.playingXI : resolvedConfig?.playingXI;
+    if (!xi) return [];
+    return (xi[battingTeamId] ?? []).map((p) => ({ id: p.id, name: p.name, role: p.role }));
+  }, [isLiveMode, match, resolvedConfig, battingTeamId]);
 
   const bowlingTeamPlayers = useMemo((): PlayerInfo[] => {
-    if (!isLiveMode) return DEMO_BOWLERS;
-    if (!match?.playingXI || !bowlingTeamId) return [];
-    return (match.playingXI[bowlingTeamId] ?? []).map((p) => ({ id: p.id, name: p.name, role: p.role }));
-  }, [isLiveMode, match, bowlingTeamId]);
+    if (!bowlingTeamId) return [];
+    const xi = isLiveMode ? match?.playingXI : resolvedConfig?.playingXI;
+    if (!xi) return [];
+    return (xi[bowlingTeamId] ?? []).map((p) => ({ id: p.id, name: p.name, role: p.role }));
+  }, [isLiveMode, match, resolvedConfig, bowlingTeamId]);
 
-  // Combined for name lookups (getPlayerName)
   const allPlayers = useMemo((): PlayerInfo[] => {
     return [...battingTeamPlayers, ...bowlingTeamPlayers].filter(
       (p, i, arr) => arr.findIndex((x) => x.id === p.id) === i,
     );
   }, [battingTeamPlayers, bowlingTeamPlayers]);
 
-  // Dismissed batsmen
   const dismissedIds = useMemo(() => {
     const dismissed = new Set<string>();
     for (const b of balls) {
@@ -219,7 +217,6 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
     [allPlayers]
   );
 
-  // Current over balls
   const currentOverBalls = useMemo(() => {
     let validSeen = 0;
     let overStartIdx = balls.length;
@@ -236,7 +233,6 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
     return balls.slice(overStartIdx);
   }, [balls, stats]);
 
-  // Batsmen and bowler stats
   const batsmenStatsMap = useMemo(() => computeBatsmenStats(balls), [balls]);
   const bowlerStatsMap = useMemo(() => computeBowlerStats(balls), [balls]);
 
@@ -245,7 +241,6 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
   const prevOverRef = useRef(stats.currentOver);
   const prevWicketsRef = useRef(stats.totalWickets);
 
-  // Refs for player IDs so the effect can read current values without depending on them
   const strikerIdRef = useRef(strikerId);
   const nonStrikerIdRef = useRef(nonStrikerId);
   strikerIdRef.current = strikerId;
@@ -256,33 +251,17 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
   useEffect(() => {
     const prevLen = prevBallsLenRef.current;
 
-    // Handle reset (balls.length decreased) — sync refs to new state
     if (balls.length < prevLen) {
-      console.log('[OVER-DETECT] RESET: balls', balls.length, 'prevLen', prevLen);
       prevBallsLenRef.current = balls.length;
       prevOverRef.current = stats.currentOver;
       prevWicketsRef.current = stats.totalWickets;
       return;
     }
 
-    // No new ball added
     if (balls.length === prevLen) return;
 
-    // New ball added — compare against previous refs
     const prevOver = prevOverRef.current;
     const prevWickets = prevWicketsRef.current;
-
-    console.log('[OVER-DETECT] NEW BALL:', {
-      ballsLen: balls.length,
-      prevLen,
-      currentOver: stats.currentOver,
-      currentBall: stats.currentBall,
-      prevOver,
-      totalWickets: stats.totalWickets,
-      prevWickets,
-      overChanged: stats.currentOver > prevOver,
-      wicketFell: stats.totalWickets > prevWickets,
-    });
 
     prevBallsLenRef.current = balls.length;
     prevOverRef.current = stats.currentOver;
@@ -292,17 +271,14 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
     const wicketFell = stats.totalWickets > prevWickets;
 
     if (wicketFell && overChanged) {
-      console.log('[OVER-DETECT] >>> WICKET + OVER CHANGE');
       cascadeToBowlerRef.current = true;
       setStrikerId(null);
       setBowlerId(null);
       setTimeout(() => setPickerMode('striker'), 300);
     } else if (wicketFell) {
-      console.log('[OVER-DETECT] >>> WICKET');
       setStrikerId(null);
       setTimeout(() => setPickerMode('striker'), 300);
     } else if (overChanged) {
-      console.log('[OVER-DETECT] >>> OVER CHANGE — showing bowler picker');
       setStrikerId(nonStrikerIdRef.current);
       setNonStrikerId(strikerIdRef.current);
       setBowlerId(null);
@@ -312,16 +288,16 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
 
   // ---- Reset players when innings completes ----
   useEffect(() => {
-    if (isLiveMode && isInningsComplete && !prevInningsCompleteRef.current) {
+    if (isInningsComplete && !prevInningsCompleteRef.current) {
       setStrikerId(null);
       setNonStrikerId(null);
       setBowlerId(null);
       setPickerMode(null);
     }
     prevInningsCompleteRef.current = isInningsComplete;
-  }, [isLiveMode, isInningsComplete]);
+  }, [isInningsComplete]);
 
-  // ---- Reconcile optimistic balls (state cleanup) ----
+  // ---- Reconcile optimistic balls ----
   useEffect(() => {
     if (firestoreBalls.length > prevFirestoreLenRef.current) {
       const newBallsCount = firestoreBalls.length - prevFirestoreLenRef.current;
@@ -329,6 +305,32 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
     }
     prevFirestoreLenRef.current = firestoreBalls.length;
   }, [firestoreBalls.length]);
+
+  // ---- Load live player state from Firestore on first match load ----
+  const hasLoadedPlayersRef = useRef(false);
+
+  useEffect(() => {
+    if (!isLiveMode || !match || hasLoadedPlayersRef.current) return;
+    if (match.currentStrikerId) setStrikerId(match.currentStrikerId);
+    if (match.currentNonStrikerId) setNonStrikerId(match.currentNonStrikerId);
+    if (match.currentBowlerId) setBowlerId(match.currentBowlerId);
+    hasLoadedPlayersRef.current = true;
+  }, [match, isLiveMode]);
+
+  // ---- Persist local match state to AsyncStorage ----
+  useEffect(() => {
+    if (isLiveMode || !resolvedConfig) return;
+    saveLocalMatch({
+      id: localMatchIdRef.current,
+      config: resolvedConfig,
+      balls: localBalls,
+      strikerId,
+      nonStrikerId,
+      bowlerId,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+  }, [localBalls, strikerId, nonStrikerId, bowlerId, resolvedConfig, isLiveMode]);
 
   // ---- Handlers ----
 
@@ -369,7 +371,6 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
         commentary: runs === 0 ? 'Dot ball' : runs === 4 ? 'FOUR!' : runs === 6 ? 'SIX!' : `${runs} ${runs === 1 ? 'run' : 'runs'}`,
       };
       addBall(newBall);
-      // Swap strike on odd runs
       if (runs % 2 === 1) {
         const prev = strikerId;
         setStrikerId(nonStrikerId);
@@ -446,24 +447,74 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
     }
   }, [isLiveMode, optimisticBalls.length, localBalls.length]);
 
+  const handleGoLive = useCallback(async () => {
+    if (!resolvedConfig) return;
+    try {
+      const db = getFirebaseDb();
+      const battingFirstId =
+        resolvedConfig.toss.decision === 'bat'
+          ? resolvedConfig.toss.winner
+          : resolvedConfig.toss.winner === resolvedConfig.teamA
+            ? resolvedConfig.teamB
+            : resolvedConfig.teamA;
+      const ref = await addDoc(collection(db, 'matches'), {
+        ...resolvedConfig,
+        status: 'live' as const,
+        currentInningsIndex: 0,
+        innings: [{ teamId: battingFirstId, totalRuns: 0, totalWickets: 0, overs: 0, ballCount: 0 }],
+        quickMatch: true,
+      });
+      setLocalBalls([]);
+      setOptimisticBalls([]);
+      setLiveMatchId(ref.id);
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to go live');
+    }
+  }, [resolvedConfig]);
+
   const handlePickPlayer = useCallback(
     (playerId: string) => {
+      let newStrikerId = strikerId;
+      let newNonStrikerId = nonStrikerId;
+      let newBowlerId = bowlerId;
+
       if (pickerMode === 'striker') {
         setStrikerId(playerId);
-        // Only cascade to bowler picker when a wicket+over change triggered this flow
+        newStrikerId = playerId;
         if (cascadeToBowlerRef.current) {
           cascadeToBowlerRef.current = false;
           setPickerMode('bowler');
+          // Persist to Firestore mid-flow (bowler not set yet, will save again after bowler pick)
+          if (isLiveMode && liveMatchId) {
+            const db = getFirebaseDb();
+            updateDoc(doc(db, 'matches', liveMatchId), {
+              currentStrikerId: playerId,
+              currentNonStrikerId: newNonStrikerId,
+              currentBowlerId: newBowlerId,
+            }).catch(() => {});
+          }
           return;
         }
       } else if (pickerMode === 'nonStriker') {
         setNonStrikerId(playerId);
+        newNonStrikerId = playerId;
       } else if (pickerMode === 'bowler') {
         setBowlerId(playerId);
+        newBowlerId = playerId;
       }
       setPickerMode(null);
+
+      // Persist active player state to Firestore
+      if (isLiveMode && liveMatchId) {
+        const db = getFirebaseDb();
+        updateDoc(doc(db, 'matches', liveMatchId), {
+          currentStrikerId: newStrikerId,
+          currentNonStrikerId: newNonStrikerId,
+          currentBowlerId: newBowlerId,
+        }).catch(() => {});
+      }
     },
-    [pickerMode, bowlerId]
+    [pickerMode, strikerId, nonStrikerId, bowlerId, isLiveMode, liveMatchId]
   );
 
   const handleSwapStrike = useCallback(() => {
@@ -473,70 +524,18 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
     setNonStrikerId(s);
   }, [strikerId, nonStrikerId]);
 
-  const toggleDemoMode = () => {
-    if (isDemoMode) {
-      Alert.alert(
-        'Switch to Live Mode',
-        'This will clear all demo data and start a fresh innings. Continue?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Start Live',
-            style: 'destructive',
-            onPress: () => {
-              setLocalBalls([]);
-              setIsDemoMode(false);
-              setStrikerId(null);
-              setNonStrikerId(null);
-              setBowlerId(null);
-            },
-          },
-        ]
-      );
-    } else {
-      Alert.alert(
-        'Load Demo Data',
-        'This will replace your current scoring with demo data. Continue?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Load Demo',
-            onPress: () => {
-              setLocalBalls(generateDemoData());
-              setIsDemoMode(true);
-              setStrikerId('bat1');
-              setNonStrikerId('bat2');
-              setBowlerId('bowl1');
-            },
-          },
-        ]
-      );
-    }
-  };
-
-  const handleReset = () => {
-    Alert.alert(
-      'Reset Innings',
-      'This will clear all balls and start fresh. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: () => {
-            setLocalBalls([]);
-            setOptimisticBalls([]);
-            setIsDemoMode(false);
-            setStrikerId(null);
-            setNonStrikerId(null);
-            setBowlerId(null);
-          },
-        },
-      ]
+  // ---- Loading states ----
+  if (localLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.electricGreen} />
+          <Text style={styles.loadingText}>Loading match...</Text>
+        </View>
+      </SafeAreaView>
     );
-  };
+  }
 
-  // ---- Loading state ----
   if (isLiveMode && syncLoading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -552,10 +551,14 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
     ? (battingTeamId === match?.teamA
         ? (match?.teamAName ?? match?.teamA)
         : (match?.teamBName ?? match?.teamB)) ?? 'Team'
-    : teamName;
+    : resolvedConfig
+      ? (battingTeamId === resolvedConfig.teamA
+          ? resolvedConfig.teamAName
+          : resolvedConfig.teamBName)
+      : 'Team';
+
   const canUndo = isLiveMode ? optimisticBalls.length > 0 : localBalls.length > 0;
 
-  // Players for the picker modal
   const pickerPlayers: PlayerInfo[] =
     pickerMode === 'bowler' ? availableBowlers :
     pickerMode === 'striker' || pickerMode === 'nonStriker' ? availableBatsmen :
@@ -568,7 +571,7 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* ── Header (consistent with other screens) ── */}
+      {/* ── Header ── */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={onBack}
@@ -580,10 +583,16 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
 
         <View style={styles.liveBadge}>
           <View style={styles.liveDot} />
-          <Text style={styles.liveBadgeText}>LIVE MATCH</Text>
+          <Text style={styles.liveBadgeText}>{isLiveMode ? 'LIVE MATCH' : 'LOCAL'}</Text>
         </View>
 
-        <View style={{ width: 60 }} />
+        {!isLiveMode && resolvedConfig ? (
+          <TouchableOpacity onPress={handleGoLive} activeOpacity={0.7}>
+            <Text style={styles.goLiveText}>Go Live</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 60 }} />
+        )}
       </View>
 
       {/* ── Scrollable content ── */}
@@ -592,37 +601,6 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Mode Controls (only in local/demo mode) */}
-        {!isLiveMode && (
-          <View style={styles.demoControls}>
-            <View style={styles.demoModeIndicator}>
-              <View style={[styles.modeBadge, isDemoMode && styles.modeBadgeActive]}>
-                <Text style={[styles.modeBadgeText, isDemoMode && styles.modeBadgeTextActive]}>
-                  {isDemoMode ? 'DEMO MODE' : 'LIVE'}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.controlButtons}>
-              <TouchableOpacity
-                style={styles.controlButton}
-                onPress={toggleDemoMode}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.controlButtonText}>
-                  {isDemoMode ? 'Go Live' : 'Load Demo'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.controlButton, styles.controlButtonDanger]}
-                onPress={handleReset}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.controlButtonText}>Reset</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
         {/* Sync error */}
         {isLiveMode && syncError && (
           <View style={styles.syncBanner}>
@@ -663,18 +641,18 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
         )}
 
         {/* Innings / Match end banner */}
-        {isLiveMode && isInningsComplete && (
+        {isInningsComplete && (
           <View
             style={[
               styles.inningsEndBanner,
-              isMatchFinished && styles.matchEndBanner,
+              isLiveMode && isMatchFinished && styles.matchEndBanner,
             ]}
           >
             <Text style={styles.inningsEndTitle}>
-              {isMatchFinished ? 'MATCH FINISHED' : 'INNINGS COMPLETE'}
+              {isLiveMode && isMatchFinished ? 'MATCH FINISHED' : 'INNINGS COMPLETE'}
             </Text>
             <Text style={styles.inningsEndReason}>
-              {isMatchFinished && currentInningsIndex === 1 && firstInningsRuns !== null
+              {isLiveMode && isMatchFinished && currentInningsIndex === 1 && firstInningsRuns !== null
                 ? stats.totalRuns > firstInningsRuns
                   ? `${match?.innings[1]?.teamId ?? 'Team'} wins by ${maxWickets - stats.totalWickets} wickets`
                   : stats.totalRuns === firstInningsRuns
@@ -872,11 +850,11 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
       </ScrollView>
 
       {/* ── Scoring Pad (Fixed at bottom) ── */}
-      <View style={[styles.scoringPad, (scoringDisabled) && styles.scoringPadDisabled]}>
+      <View style={[styles.scoringPad, scoringDisabled && styles.scoringPadDisabled]}>
         {scoringDisabled ? (
           <View style={styles.disabledOverlay}>
             <Text style={styles.disabledText}>
-              {isMatchFinished ? 'Match has ended' : 'Innings complete'}
+              {isLiveMode && isMatchFinished ? 'Match has ended' : 'Innings complete'}
             </Text>
           </View>
         ) : !playersReady ? (
@@ -1087,7 +1065,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
 
-  // ── Header (consistent with other screens) ──
+  // ── Header ──
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1115,6 +1093,11 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: Colors.electricGreen,
+  },
+  goLiveText: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.electricGreen,
   },
   liveBadgeText: {
     fontSize: Typography.fontSize.xs,
@@ -1334,30 +1317,6 @@ const styles = StyleSheet.create({
     color: Colors.gray500,
     fontStyle: 'italic',
     paddingVertical: Spacing.md,
-  },
-
-  // ── Select Player Card (empty state) ──
-  selectPlayerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: Colors.electricGreen + '4D',
-    borderStyle: 'dashed',
-    borderRadius: BorderRadius.lg,
-    paddingVertical: Spacing.sm + 2,
-    marginTop: Spacing.xs,
-    gap: Spacing.sm,
-  },
-  selectPlayerIcon: {
-    fontSize: Typography.fontSize.lg,
-    fontWeight: Typography.fontWeight.bold,
-    color: Colors.electricGreen,
-  },
-  selectPlayerText: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.semibold,
-    color: Colors.electricGreen,
   },
 
   // ── Commentary Tab ──
@@ -1606,64 +1565,6 @@ const styles = StyleSheet.create({
   syncError: {
     fontSize: Typography.fontSize.xs,
     color: Colors.error,
-  },
-
-  // ── Demo Mode Controls ──
-  demoControls: {
-    backgroundColor: Colors.gray800,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.xl,
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  demoModeIndicator: {
-    marginBottom: Spacing.sm,
-  },
-  modeBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    backgroundColor: Colors.gray700,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-    borderColor: Colors.gray600,
-  },
-  modeBadgeActive: {
-    backgroundColor: Colors.electricGreen,
-    borderColor: Colors.electricGreen,
-  },
-  modeBadgeText: {
-    fontSize: Typography.fontSize.xs,
-    fontWeight: Typography.fontWeight.bold,
-    color: Colors.textSecondary,
-    letterSpacing: 1,
-  },
-  modeBadgeTextActive: {
-    color: Colors.deepNavy,
-  },
-  controlButtons: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  controlButton: {
-    flex: 1,
-    backgroundColor: Colors.gray700,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.gray600,
-  },
-  controlButtonDanger: {
-    backgroundColor: Colors.error,
-    borderColor: Colors.error,
-  },
-  controlButtonText: {
-    fontSize: Typography.fontSize.base,
-    fontWeight: Typography.fontWeight.semibold,
-    color: Colors.white,
   },
 
   // ── Banners ──
