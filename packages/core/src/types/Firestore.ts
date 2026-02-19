@@ -20,6 +20,8 @@ export interface FirestoreMatchDoc {
   id: string;
   teamA: string;
   teamB: string;
+  teamAName?: string;
+  teamBName?: string;
   toss: Toss | null;
   status: MatchStatus;
   currentInningsIndex: number;

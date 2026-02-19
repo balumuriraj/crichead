@@ -17,6 +17,7 @@ import {
   Typography,
   type ExtraType,
 } from '@crichead/ui/mobile';
+import { Plus, User } from 'lucide-react-native';
 import {
   useMatchSync,
   calculateInningsStats,
@@ -107,9 +108,9 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
   const [optimisticBalls, setOptimisticBalls] = useState<Ball[]>([]);
 
   // ---- Active player state ----
-  const [strikerId, setStrikerId] = useState<string | null>('bat1');
-  const [nonStrikerId, setNonStrikerId] = useState<string | null>('bat2');
-  const [bowlerId, setBowlerId] = useState<string | null>('bowl1');
+  const [strikerId, setStrikerId] = useState<string | null>(null);
+  const [nonStrikerId, setNonStrikerId] = useState<string | null>(null);
+  const [bowlerId, setBowlerId] = useState<string | null>(null);
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
 
   // ---- Tab state ----
@@ -162,22 +163,29 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
   const inputDisabled = scoringDisabled || !playersReady || pickerMode !== null;
 
   // ---- Available players for picker ----
+  const battingTeamId = isLiveMode ? (match?.innings[currentInningsIndex]?.teamId ?? null) : null;
+  const bowlingTeamId = isLiveMode && battingTeamId
+    ? (match?.teamA === battingTeamId ? match?.teamB : match?.teamA) ?? null
+    : null;
+
+  const battingTeamPlayers = useMemo((): PlayerInfo[] => {
+    if (!isLiveMode) return DEMO_BATSMEN;
+    if (!match?.playingXI || !battingTeamId) return [];
+    return (match.playingXI[battingTeamId] ?? []).map((p) => ({ id: p.id, name: p.name, role: p.role }));
+  }, [isLiveMode, match, battingTeamId]);
+
+  const bowlingTeamPlayers = useMemo((): PlayerInfo[] => {
+    if (!isLiveMode) return DEMO_BOWLERS;
+    if (!match?.playingXI || !bowlingTeamId) return [];
+    return (match.playingXI[bowlingTeamId] ?? []).map((p) => ({ id: p.id, name: p.name, role: p.role }));
+  }, [isLiveMode, match, bowlingTeamId]);
+
+  // Combined for name lookups (getPlayerName)
   const allPlayers = useMemo((): PlayerInfo[] => {
-    if (!isLiveMode) return [...DEMO_BATSMEN, ...DEMO_BOWLERS].filter(
+    return [...battingTeamPlayers, ...bowlingTeamPlayers].filter(
       (p, i, arr) => arr.findIndex((x) => x.id === p.id) === i,
     );
-    // In live mode, pull from match.playingXI
-    if (!match?.playingXI) return [];
-    const players: PlayerInfo[] = [];
-    for (const teamId of Object.keys(match.playingXI)) {
-      for (const p of match.playingXI[teamId]) {
-        if (!players.find((x) => x.id === p.id)) {
-          players.push({ id: p.id, name: p.name, role: p.role });
-        }
-      }
-    }
-    return players;
-  }, [isLiveMode, match]);
+  }, [battingTeamPlayers, bowlingTeamPlayers]);
 
   // Dismissed batsmen
   const dismissedIds = useMemo(() => {
@@ -189,19 +197,19 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
   }, [balls]);
 
   const availableBatsmen = useMemo(() => {
-    return allPlayers.filter((p) =>
+    return battingTeamPlayers.filter((p) =>
       (p.role === 'bat' || p.role === 'all') &&
       !dismissedIds.has(p.id) &&
       p.id !== strikerId &&
       p.id !== nonStrikerId
     );
-  }, [allPlayers, dismissedIds, strikerId, nonStrikerId]);
+  }, [battingTeamPlayers, dismissedIds, strikerId, nonStrikerId]);
 
   const availableBowlers = useMemo(() => {
-    return allPlayers.filter((p) =>
+    return bowlingTeamPlayers.filter((p) =>
       (p.role === 'bowl' || p.role === 'all')
     );
-  }, [allPlayers]);
+  }, [bowlingTeamPlayers]);
 
   const getPlayerName = useCallback(
     (id: string | null) => {
@@ -242,6 +250,8 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
   const nonStrikerIdRef = useRef(nonStrikerId);
   strikerIdRef.current = strikerId;
   nonStrikerIdRef.current = nonStrikerId;
+  const cascadeToBowlerRef = useRef(false);
+  const prevInningsCompleteRef = useRef(false);
 
   useEffect(() => {
     const prevLen = prevBallsLenRef.current;
@@ -283,6 +293,7 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
 
     if (wicketFell && overChanged) {
       console.log('[OVER-DETECT] >>> WICKET + OVER CHANGE');
+      cascadeToBowlerRef.current = true;
       setStrikerId(null);
       setBowlerId(null);
       setTimeout(() => setPickerMode('striker'), 300);
@@ -298,6 +309,17 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
       setTimeout(() => setPickerMode('bowler'), 300);
     }
   }, [balls.length, stats]);
+
+  // ---- Reset players when innings completes ----
+  useEffect(() => {
+    if (isLiveMode && isInningsComplete && !prevInningsCompleteRef.current) {
+      setStrikerId(null);
+      setNonStrikerId(null);
+      setBowlerId(null);
+      setPickerMode(null);
+    }
+    prevInningsCompleteRef.current = isInningsComplete;
+  }, [isLiveMode, isInningsComplete]);
 
   // ---- Reconcile optimistic balls (state cleanup) ----
   useEffect(() => {
@@ -428,8 +450,9 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
     (playerId: string) => {
       if (pickerMode === 'striker') {
         setStrikerId(playerId);
-        // If bowler is also null (wicket on last ball of over), queue bowler pick next
-        if (bowlerId === null) {
+        // Only cascade to bowler picker when a wicket+over change triggered this flow
+        if (cascadeToBowlerRef.current) {
+          cascadeToBowlerRef.current = false;
           setPickerMode('bowler');
           return;
         }
@@ -525,7 +548,11 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
     );
   }
 
-  const displayTeamName = isLiveMode ? (match?.teamA ?? 'Team') : teamName;
+  const displayTeamName = isLiveMode
+    ? (battingTeamId === match?.teamA
+        ? (match?.teamAName ?? match?.teamA)
+        : (match?.teamBName ?? match?.teamB)) ?? 'Team'
+    : teamName;
   const canUndo = isLiveMode ? optimisticBalls.length > 0 : localBalls.length > 0;
 
   // Players for the picker modal
@@ -737,55 +764,37 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
                 <Text style={styles.statsHeaderCol}>SR</Text>
               </View>
 
-              {strikerId ? (() => {
-                const s = batsmenStatsMap.get(strikerId);
+              {(() => {
+                const s = strikerId ? batsmenStatsMap.get(strikerId) : null;
                 const runs = s?.runs ?? 0;
                 const b = s?.balls ?? 0;
                 const sr = b > 0 ? ((runs / b) * 100).toFixed(0) : '0';
                 return (
                   <View style={styles.statsRow}>
                     <Text style={[styles.playerName, styles.playerNameStriker]}>
-                      {getPlayerName(strikerId)}*
+                      {strikerId ? getPlayerName(strikerId) : 'Striker'}*
                     </Text>
                     <Text style={styles.statsValue}>{runs}</Text>
                     <Text style={styles.statsValue}>{b}</Text>
                     <Text style={styles.statsValue}>{sr}</Text>
                   </View>
                 );
-              })() : (
-                <TouchableOpacity
-                  style={styles.selectPlayerCard}
-                  onPress={() => setPickerMode('striker')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.selectPlayerIcon}>+</Text>
-                  <Text style={styles.selectPlayerText}>Select Striker</Text>
-                </TouchableOpacity>
-              )}
+              })()}
 
-              {nonStrikerId ? (() => {
-                const s = batsmenStatsMap.get(nonStrikerId);
+              {(() => {
+                const s = nonStrikerId ? batsmenStatsMap.get(nonStrikerId) : null;
                 const runs = s?.runs ?? 0;
                 const b = s?.balls ?? 0;
                 const sr = b > 0 ? ((runs / b) * 100).toFixed(0) : '0';
                 return (
                   <View style={styles.statsRow}>
-                    <Text style={styles.playerName}>{getPlayerName(nonStrikerId)}</Text>
+                    <Text style={styles.playerName}>{nonStrikerId ? getPlayerName(nonStrikerId) : 'Non-Striker'}</Text>
                     <Text style={styles.statsValue}>{runs}</Text>
                     <Text style={styles.statsValue}>{b}</Text>
                     <Text style={styles.statsValue}>{sr}</Text>
                   </View>
                 );
-              })() : (
-                <TouchableOpacity
-                  style={styles.selectPlayerCard}
-                  onPress={() => setPickerMode('nonStriker')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.selectPlayerIcon}>+</Text>
-                  <Text style={styles.selectPlayerText}>Select Non-Striker</Text>
-                </TouchableOpacity>
-              )}
+              })()}
             </View>
 
             {/* Bowler Card */}
@@ -798,8 +807,8 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
                 <Text style={styles.statsHeaderCol}>E</Text>
               </View>
 
-              {bowlerId ? (() => {
-                const s = bowlerStatsMap.get(bowlerId);
+              {(() => {
+                const s = bowlerId ? bowlerStatsMap.get(bowlerId) : null;
                 const validBalls = s?.validBalls ?? 0;
                 const overs = `${Math.floor(validBalls / 6)}.${validBalls % 6}`;
                 const runs = s?.runs ?? 0;
@@ -807,7 +816,7 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
                 const econ = validBalls > 0 ? ((runs / validBalls) * 6).toFixed(1) : '0.0';
                 return (
                   <View style={styles.statsRow}>
-                    <Text style={styles.playerName}>{getPlayerName(bowlerId)}</Text>
+                    <Text style={styles.playerName}>{bowlerId ? getPlayerName(bowlerId) : 'Bowler'}</Text>
                     <Text style={styles.statsValue}>{overs}</Text>
                     <Text style={styles.statsValue}>{runs}</Text>
                     <Text style={[styles.statsValue, wickets > 0 && styles.statsValueHighlight]}>
@@ -816,16 +825,7 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
                     <Text style={styles.statsValue}>{econ}</Text>
                   </View>
                 );
-              })() : (
-                <TouchableOpacity
-                  style={styles.selectPlayerCard}
-                  onPress={() => setPickerMode('bowler')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.selectPlayerIcon}>+</Text>
-                  <Text style={styles.selectPlayerText}>Select Bowler</Text>
-                </TouchableOpacity>
-              )}
+              })()}
             </View>
           </View>
         )}
@@ -880,37 +880,52 @@ export default function ScoringScreen({ matchId = null, onBack }: ScoringScreenP
             </Text>
           </View>
         ) : !playersReady ? (
-          <View style={styles.disabledOverlay}>
-            <Text style={styles.disabledText}>Select all players to start scoring</Text>
-            <View style={styles.quickSelectRow}>
-              {!strikerId && (
-                <TouchableOpacity
-                  style={styles.quickSelectBtn}
-                  onPress={() => setPickerMode('striker')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.quickSelectText}>Select Striker</Text>
-                </TouchableOpacity>
-              )}
-              {!nonStrikerId && (
-                <TouchableOpacity
-                  style={styles.quickSelectBtn}
-                  onPress={() => setPickerMode('nonStriker')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.quickSelectText}>Select Non-Striker</Text>
-                </TouchableOpacity>
-              )}
-              {!bowlerId && (
-                <TouchableOpacity
-                  style={styles.quickSelectBtn}
-                  onPress={() => setPickerMode('bowler')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.quickSelectText}>Select Bowler</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+          <View style={styles.playerPickContainer}>
+            {!strikerId && (
+              <TouchableOpacity
+                style={styles.playerPickCard}
+                onPress={() => setPickerMode('striker')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.playerPickAvatar}>
+                  <Plus size={22} color={Colors.gray500} strokeWidth={1.5} />
+                </View>
+                <View style={styles.playerPickInfo}>
+                  <Text style={styles.playerPickRole}>STRIKER (ON-STRIKE)</Text>
+                  <Text style={styles.playerPickName}>Pick Striker</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+            {!nonStrikerId && (
+              <TouchableOpacity
+                style={styles.playerPickCard}
+                onPress={() => setPickerMode('nonStriker')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.playerPickAvatar}>
+                  <Plus size={22} color={Colors.gray500} strokeWidth={1.5} />
+                </View>
+                <View style={styles.playerPickInfo}>
+                  <Text style={styles.playerPickRole}>NON-STRIKER</Text>
+                  <Text style={styles.playerPickName}>Pick Non-Striker</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+            {!bowlerId && (
+              <TouchableOpacity
+                style={styles.playerPickCard}
+                onPress={() => setPickerMode('bowler')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.playerPickAvatar}>
+                  <Plus size={22} color={Colors.gray500} strokeWidth={1.5} />
+                </View>
+                <View style={styles.playerPickInfo}>
+                  <Text style={styles.playerPickRole}>BOWLER</Text>
+                  <Text style={styles.playerPickName}>Pick Bowler</Text>
+                </View>
+              </TouchableOpacity>
+            )}
           </View>
         ) : (
           <>
@@ -1538,24 +1553,44 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
-  // ── Quick select (when players not set) ──
-  quickSelectRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-  },
-  quickSelectBtn: {
-    backgroundColor: Colors.electricGreen,
-    borderRadius: BorderRadius.lg,
+  // ── Player pick cards (when players not set) ──
+  playerPickContainer: {
     paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
+    gap: Spacing.sm,
   },
-  quickSelectText: {
+  playerPickCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.gray900,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    borderColor: Colors.electricGreen + '4D',
+    borderStyle: 'dashed',
+    padding: Spacing.md,
+    gap: Spacing.md,
+  },
+  playerPickAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.lg,
+    backgroundColor: Colors.gray700,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playerPickInfo: {
+    flex: 1,
+  },
+  playerPickRole: {
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.white,
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  playerPickName: {
     fontSize: Typography.fontSize.sm,
     fontWeight: Typography.fontWeight.bold,
-    color: Colors.deepNavy,
+    color: Colors.electricGreen,
   },
 
   // ── Sync banner ──

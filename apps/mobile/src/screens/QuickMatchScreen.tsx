@@ -40,7 +40,7 @@ function makePlayers(prefix: string, count: number): TempPlayer[] {
   }));
 }
 
-// const OVERS_PRESETS = [5, 10, 15, 20];
+const OVERS_PRESETS = [5, 10, 15, 20];
 
 /* ── Component ── */
 
@@ -91,6 +91,8 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
       const matchDoc = {
         teamA: HOME_TEAM.id,
         teamB: AWAY_TEAM.id,
+        teamAName: HOME_TEAM.name,
+        teamBName: AWAY_TEAM.name,
         toss: { winner: tossWinner, decision: tossDecision },
         status: 'live' as const,
         currentInningsIndex: 0,
@@ -208,7 +210,7 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
           </View>
 
           {/* Quick overs presets */}
-          {/* <View style={styles.presetsRow}>
+          <View style={styles.presetsRow}>
             {OVERS_PRESETS.map((v) => (
               <TouchableOpacity
                 key={v}
@@ -229,7 +231,7 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
                 </Text>
               </TouchableOpacity>
             ))}
-          </View> */}
+          </View>
 
           {/* Players per side */}
           <View style={styles.settingRow}>
