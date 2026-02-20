@@ -10,4 +10,5 @@ export interface QuickMatchConfig {
   playingXI: Record<string, PlayingXIEntry[]>;
   oversPerInnings: number;
   playersPerSide: number;
+  wicketsPerInnings?: number;
 }

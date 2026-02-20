@@ -1,12 +1,13 @@
 import { Innings } from './Innings';
 
 export type TossDecision = 'bat' | 'bowl';
-export type MatchStatus = 'upcoming' | 'live' | 'finished';
+export type MatchStatus = 'upcoming' | 'live' | 'finished' | 'abandoned';
 export type MatchFormat = 't20' | 'odi' | 'test' | 'custom';
 
 export interface MatchConfig {
   format: MatchFormat;
   oversPerInnings: number;
+  wicketsPerInnings?: number;
   venue: string;
   scheduledDate: string;
   tournament: string;

@@ -6,12 +6,10 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Modal,
-  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { Calendar, ChevronRight, Play, ChevronDown, Zap, Smartphone } from 'lucide-react-native';
+import { Zap, Plus, Settings, RotateCcw, Bell } from 'lucide-react-native';
 import { listLocalMatches, type LocalMatchRecord } from '../../src/utils/localMatchStore';
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
@@ -22,19 +20,23 @@ interface MatchDoc {
   id: string;
   teamA: string;
   teamB: string;
-  status: 'upcoming' | 'live' | 'finished';
+  status: 'upcoming' | 'live' | 'finished' | 'abandoned';
 }
 
 export default function HomeScreen() {
   const router = useRouter();
   const [matches, setMatches] = useState<MatchDoc[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showDropdown, setShowDropdown] = useState(false);
   const [localMatches, setLocalMatches] = useState<LocalMatchRecord[]>([]);
 
   useFocusEffect(
     useCallback(() => {
-      listLocalMatches().then(setLocalMatches);
+      listLocalMatches().then((records) => {
+        // Only show active matches, sort newest first
+        const activeRecords = records.filter(m => m.status !== 'finished' && m.status !== 'abandoned');
+        const sorted = [...activeRecords].sort((a, b) => b.updatedAt - a.updatedAt);
+        setLocalMatches(sorted);
+      });
     }, []),
   );
 
@@ -55,170 +57,199 @@ export default function HomeScreen() {
   const liveMatches = matches.filter((m) => m.status === 'live');
   const upcomingMatches = matches.filter((m) => m.status === 'upcoming');
 
+  const featuredOnlineLive = liveMatches[0];
+  const featuredOnlineUpcoming = upcomingMatches[0];
+  const featuredLocal = localMatches[0];
+  const featuredMatch = featuredOnlineLive || featuredOnlineUpcoming || featuredLocal;
+
+  const fMatchNameA = featuredMatch && 'config' in featuredMatch ? (featuredMatch as unknown as LocalMatchRecord).config.teamAName : (featuredMatch as MatchDoc)?.teamA;
+  const fMatchNameB = featuredMatch && 'config' in featuredMatch ? (featuredMatch as unknown as LocalMatchRecord).config.teamBName : (featuredMatch as MatchDoc)?.teamB;
+  const fMatchStatus = featuredMatch && 'status' in featuredMatch ? featuredMatch.status : 'local';
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
+      {/* ── Header ── */}
       <View style={styles.header}>
         <Text style={styles.brand}>
-          cric<Text style={styles.brandAccent}>head</Text>
+          <Text style={styles.brandItalic}>CRIC</Text>
+          <Text style={styles.brandSuffix}>HEAD</Text>
         </Text>
+        <TouchableOpacity style={styles.notificationBtn} activeOpacity={0.7}>
+          <Bell size={22} color={Colors.white} />
+        </TouchableOpacity>
+      </View>      
 
-        {/* Split Button */}
-        <View style={styles.splitButton}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} showsVerticalScrollIndicator={false}>
+
+        {/* ── Action Row ── */}
+        <View style={styles.actionRow}>
+
           <TouchableOpacity
-            style={styles.splitMain}
+            style={styles.actionBtn}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               router.push('/match/new');
             }}
             activeOpacity={0.8}
           >
-            <Play size={14} color={Colors.deepNavy} strokeWidth={3} />
-            <Text style={styles.splitMainText}>Start Match</Text>
+            <Plus size={18} color={Colors.white} />
+            <View style={styles.actionBtnBody}>
+              <Text style={styles.actionBtnText}>NEW MATCH</Text>
+            </View>
           </TouchableOpacity>
-          <View style={styles.splitDivider} />
+
           <TouchableOpacity
-            style={styles.splitDropdown}
+            style={[styles.actionBtn, styles.quickMatchBtn]}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setShowDropdown(true);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              router.push('/match/quick');
             }}
             activeOpacity={0.8}
           >
-            <ChevronDown size={14} color={Colors.deepNavy} strokeWidth={3} />
+            <Zap size={18} color={Colors.electricGreen} fill={Colors.electricGreen} />
+            <View style={styles.actionBtnBody}>
+              <Text style={[styles.actionBtnText, styles.quickMatchText]}>QUICK MATCH</Text>
+            </View>
           </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Dropdown Menu */}
-      <Modal
-        visible={showDropdown}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowDropdown(false)}
-      >
-        <Pressable style={styles.overlay} onPress={() => setShowDropdown(false)}>
-          <View style={styles.dropdownMenu}>
-            <TouchableOpacity
-              style={styles.dropdownItem}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                setShowDropdown(false);
-                router.push('/match/new');
-              }}
-              activeOpacity={0.7}
-            >
-              <Play size={16} color={Colors.electricGreen} strokeWidth={2.5} />
-              <View style={styles.dropdownItemInfo}>
-                <Text style={styles.dropdownItemTitle}>New Match</Text>
-                <Text style={styles.dropdownItemHint}>Full setup wizard</Text>
+        {/* ── Featured Match Card ── */}
+        {featuredMatch ? (
+          <TouchableOpacity 
+            style={styles.featuredCard}
+            activeOpacity={0.8}
+            onPress={() => router.push('config' in featuredMatch ? `/match/local-${featuredMatch.id}` : `/match/${featuredMatch.id}`)}
+          >
+            <View style={styles.featuredHeader}>
+              <View style={styles.featuredTag}>
+                <Text style={styles.featuredTagText}>FEATURED MATCH</Text>
               </View>
-            </TouchableOpacity>
-            <View style={styles.dropdownDivider} />
-            <TouchableOpacity
-              style={styles.dropdownItem}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                setShowDropdown(false);
-                router.push('/match/quick');
-              }}
-              activeOpacity={0.7}
-            >
-              <Zap size={16} color={Colors.warning} strokeWidth={2.5} />
-              <View style={styles.dropdownItemInfo}>
-                <Text style={styles.dropdownItemTitle}>Quick Match</Text>
-                <Text style={styles.dropdownItemHint}>
-                  Skip setup, start instantly
+              <View style={styles.featuredLiveRow}>
+                {fMatchStatus === 'live' && <View style={styles.featuredLiveDot} />}
+                <Text style={[styles.featuredLiveText, fMatchStatus !== 'live' && { color: Colors.gray400 }]}>
+                  {fMatchStatus === 'live' ? 'LIVE' : (fMatchStatus === 'upcoming' ? 'UPCOMING' : 'LOCAL')}
                 </Text>
               </View>
+            </View>
+
+            <View style={styles.featuredTeamRow}>
+              <View style={styles.teamLeft}>
+                <View style={[styles.teamCircle, { backgroundColor: '#1E3A8A' }]}>
+                  <Text style={styles.teamCircleText}>{fMatchNameA?.substring(0, 3).toUpperCase() || 'TMA'}</Text>
+                </View>
+                <Text style={styles.teamNameLarge} numberOfLines={1}>{fMatchNameA?.length > 12 ? fMatchNameA.substring(0,10)+'...' : fMatchNameA}</Text>
+              </View>
+              <Text style={styles.teamScoreLarge}>
+                --<Text style={styles.teamWicketsLarge}>/--</Text>
+              </Text>
+            </View>
+
+            <View style={styles.featuredTeamRow}>
+              <View style={styles.teamLeft}>
+                <View style={[styles.teamCircle, { backgroundColor: '#B45309' }]}>
+                  <Text style={styles.teamCircleText}>{fMatchNameB?.substring(0, 3).toUpperCase() || 'TMB'}</Text>
+                </View>
+                <Text style={styles.teamNameLarge} numberOfLines={1}>{fMatchNameB?.length > 12 ? fMatchNameB.substring(0,10)+'...' : fMatchNameB}</Text>
+              </View>
+              <Text style={styles.teamScoreLargeSub}>
+                --<Text style={styles.teamWicketsLargeSub}>/--</Text>
+              </Text>
+            </View>
+
+            <View style={styles.featuredFooter}>
+              <View style={styles.featuredStats}>
+                <Text style={styles.featuredStatText}>
+                  Tap to view match details
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <View style={[styles.featuredCard, { alignItems: 'center', paddingVertical: 32 }]}>
+            <View style={[styles.teamCircle, { backgroundColor: Colors.electricGreen + '1A', width: 48, height: 48, borderRadius: 24, marginBottom: 16, marginRight: 0 }]}>
+              <Plus size={24} color={Colors.electricGreen} />
+            </View>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: Colors.white, marginBottom: 8 }}>Ready to Play?</Text>
+            <Text style={{ fontSize: 12, color: Colors.gray400, textAlign: 'center', marginBottom: 20, lineHeight: 18 }}>
+              Your featured match will appear here.{'\n'}Start a Quick Match to get started.
+            </Text>
+            <TouchableOpacity
+              style={{ backgroundColor: Colors.electricGreen, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 }}
+              onPress={() => router.push('/match/quick')}
+              activeOpacity={0.8}
+            >
+              <Text style={{ color: Colors.deepNavy, fontWeight: '800', fontSize: 12 }}>START QUICK MATCH</Text>
             </TouchableOpacity>
           </View>
-        </Pressable>
-      </Modal>
-
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
-        {/* Live Matches */}
-        {liveMatches.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.liveDot} />
-              <Text style={styles.sectionTitle}>LIVE NOW</Text>
-            </View>
-            {liveMatches.map((match) => (
-              <TouchableOpacity
-                key={match.id}
-                style={[styles.matchCard, styles.matchCardLive]}
-                onPress={() => router.push(`/match/${match.id}`)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.matchInfo}>
-                  <Text style={styles.matchTeams}>{match.teamA} vs {match.teamB}</Text>
-                  <Text style={styles.matchStatus}>In Progress</Text>
-                </View>
-                <ChevronRight size={18} color={Colors.electricGreen} />
-              </TouchableOpacity>
-            ))}
-          </View>
         )}
 
-        {/* Local Matches */}
-        {localMatches.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Smartphone size={14} color={Colors.gray500} />
-              <Text style={styles.sectionTitle}>LOCAL MATCHES</Text>
-            </View>
-            {localMatches.map((m) => (
-              <TouchableOpacity
-                key={m.id}
-                style={styles.matchCard}
-                onPress={() => router.push(`/match/local-${m.id}`)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.matchInfo}>
-                  <Text style={styles.matchTeams}>
-                    {m.config.teamAName} vs {m.config.teamBName}
-                  </Text>
-                  <Text style={styles.matchStatus}>
-                    Local · {m.config.oversPerInnings} overs
-                  </Text>
-                </View>
-                <ChevronRight size={18} color={Colors.gray500} />
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {/* Upcoming Matches */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Calendar size={14} color={Colors.gray500} />
-            <Text style={styles.sectionTitle}>UPCOMING</Text>
-          </View>
-          {loading ? (
-            <ActivityIndicator color={Colors.electricGreen} style={{ marginTop: Spacing.xl }} />
-          ) : upcomingMatches.length === 0 && liveMatches.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No upcoming matches</Text>
-              <Text style={styles.emptyHint}>Tap "Start Match" to create one</Text>
-            </View>
-          ) : (
-            upcomingMatches.map((match) => (
-              <TouchableOpacity
-                key={match.id}
-                style={styles.matchCard}
-                onPress={() => router.push(`/match/${match.id}`)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.matchInfo}>
-                  <Text style={styles.matchTeams}>{match.teamA} vs {match.teamB}</Text>
-                  <Text style={styles.matchStatus}>Scheduled</Text>
-                </View>
-                <ChevronRight size={18} color={Colors.gray500} />
-              </TouchableOpacity>
-            ))
-          )}
+        {/* ── Local Matches List ── */}
+        <View style={styles.listHeader}>
+          <Text style={styles.listSectionTitle}>MATCHES</Text>
+          <TouchableOpacity>
+            <Text style={styles.viewAllText}>VIEW ALL</Text>
+          </TouchableOpacity>
         </View>
+
+        {localMatches.map((m, idx) => (
+          <TouchableOpacity
+            key={m.id}
+            style={styles.listItem}
+            onPress={() => router.push(`/match/local-${m.id}`)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.listLeft}>
+              <Text style={styles.listTeamsText}>
+                <Text style={styles.listTeamBold}>{m.config.teamAName}</Text>
+                <Text style={styles.listVs}> VS </Text>
+                <Text style={styles.listTeamBold}>{m.config.teamBName}</Text>
+              </Text>
+              <Text style={styles.listSubtitle}>
+                LOCAL MATCH • <Text style={styles.listHighlight}>{m.config.oversPerInnings} Ov</Text>
+              </Text>
+            </View>
+            <View style={styles.listRight}>
+              <Text style={styles.listScore}>--/--</Text>
+              <View style={[styles.statusBadge, styles.statusBadgeUpcoming]}>
+                <Text style={styles.statusBadgeText}>LOCAL</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        ))}
+
+        {/* ── Upcoming/Live Matches from Server ── */}
+        {matches.map((m) => {
+          const isLive = m.status === 'live';
+          return (
+            <TouchableOpacity
+              key={m.id}
+              style={styles.listItem}
+              onPress={() => router.push(`/match/${m.id}`)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.listLeft}>
+                <Text style={styles.listTeamsText}>
+                  <Text style={styles.listTeamBold}>{m.teamA}</Text>
+                  <Text style={styles.listVs}> VS </Text>
+                  <Text style={styles.listTeamBold}>{m.teamB}</Text>
+                </Text>
+                <Text style={styles.listSubtitle}>
+                  ONLINE MATCH • {isLive ? 'IN PROGRESS' : 'Starts later'}
+                </Text>
+              </View>
+              <View style={styles.listRight}>
+                <Text style={styles.listScore}>--/--</Text>
+                <View style={[styles.statusBadge, isLive ? styles.statusBadgeLive : styles.statusBadgeUpcoming]}>
+                  <Text style={styles.statusBadgeText}>{isLive ? 'LIVE' : 'UPCOMING'}</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+
+        {loading && (
+          <ActivityIndicator color={Colors.electricGreen} style={{ marginTop: Spacing.xl }} />
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -229,99 +260,86 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.deepNavy,
   },
+  
+  /* ── Header ── */
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
+    borderBottomWidth: 0.25,
     borderBottomColor: Colors.border,
   },
   brand: {
-    fontSize: Typography.fontSize.xl,
-    fontWeight: Typography.fontWeight.bold,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  brandItalic: {
+    fontSize: 22,
+    fontWeight: '900',
+    fontStyle: 'italic',
     color: Colors.white,
+    letterSpacing: -0.5,
   },
-  brandAccent: {
+  brandSuffix: {
+    fontSize: 22,
+    fontWeight: '900',
+    fontStyle: 'italic',
     color: Colors.electricGreen,
+    letterSpacing: -0.5,
+  },
+  notificationBtn: {
+    padding: Spacing.xs,
   },
 
-  /* ── Split Button ── */
-  splitButton: {
+  /* ── Action Row ── */
+  actionRow: {
+    flexDirection: 'row',
+    paddingBottom: Spacing.md,
+    gap: Spacing.sm,    
+  },
+  actionBtn: {
+    flex: 2,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.electricGreen,
-    borderRadius: BorderRadius.lg,
-    overflow: 'hidden',
-  },
-  splitMain: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    gap: Spacing.xs,
-  },
-  splitMainText: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.bold,
-    color: Colors.deepNavy,
-  },
-  splitDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: Colors.deepNavy + '33',
-  },
-  splitDropdown: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.sm,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  /* ── Dropdown Menu ── */
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-start',
-    alignItems: 'flex-end',
-    paddingTop: 100,
-    paddingRight: Spacing.lg,
-  },
-  dropdownMenu: {
     backgroundColor: Colors.gray800,
-    borderRadius: BorderRadius.xl,
+    borderRadius: 30,
+    paddingVertical: 12,
     borderWidth: 1,
     borderColor: Colors.border,
-    width: 220,
-    overflow: 'hidden',
+    gap: Spacing.sm,
   },
-  dropdownItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.md,
-    gap: Spacing.md,
+  actionBtnBody: {
+    alignItems: 'flex-start',
   },
-  dropdownItemInfo: {
-    flex: 1,
+  quickMatchBtn: {
+    backgroundColor: Colors.electricGreen + '0D',
+    borderColor: Colors.electricGreen + '4D',
   },
-  dropdownItemTitle: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.bold,
+  actionBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
     color: Colors.white,
+    lineHeight: 14,
   },
-  dropdownItemHint: {
-    fontSize: Typography.fontSize.xs,
-    color: Colors.gray500,
-    marginTop: 1,
+  quickMatchText: {
+    color: Colors.electricGreen,
+    fontStyle: 'italic',
   },
-  dropdownDivider: {
-    height: 1,
-    backgroundColor: Colors.border,
-    marginHorizontal: Spacing.md,
+  iconBtn: {
+    flex: 1,
+    aspectRatio: 1,
+    backgroundColor: Colors.gray800,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
 
-  /* ── Content ── */
+  /* ── Content Area ── */
   content: {
     flex: 1,
   },
@@ -329,64 +347,219 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     paddingBottom: Spacing.xxl,
   },
-  section: {
+
+  /* ── Featured Card ── */
+  featuredCard: {
+    backgroundColor: Colors.gray800,
+    borderRadius: 24,
+    padding: 20,
     marginBottom: Spacing.xl,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    // a slight inner shadow or gradient effect is simulated via borders
   },
-  sectionHeader: {
+  featuredHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  featuredTag: {
+    backgroundColor: Colors.border,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  featuredTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Colors.gray400,
+    letterSpacing: 1,
+  },
+  featuredLiveRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+  },
+  featuredLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#EF4444',
+    marginRight: 6,
+  },
+  featuredLiveText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#EF4444',
+    letterSpacing: 1,
+  },
+  featuredTeamRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  teamLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  teamCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  teamCircleIND: {
+    backgroundColor: '#1E3A8A', // Blue
+  },
+  teamCircleAUS: {
+    backgroundColor: '#B45309', // Amber-ish
+  },
+  teamCircleText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Colors.white,
+  },
+  teamNameLarge: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.white,
+  },
+  teamScoreLarge: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: Colors.white,
+  },
+  teamWicketsLarge: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.gray500,
+  },
+  teamScoreLargeSub: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: Colors.gray400,
+  },
+  teamWicketsLargeSub: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.gray600,
+  },
+  featuredFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    paddingTop: 16,
+  },
+  featuredStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  featuredStatText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.gray500,
+  },
+  featuredStatValue: {
+    color: Colors.white,
+    fontWeight: '800',
+  },
+  winProbTag: {
+    backgroundColor: Colors.electricGreen + '1A',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.electricGreen + '4D',
+  },
+  winProbText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Colors.electricGreen,
+  },
+
+  /* ── List Section ── */
+  listHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: Spacing.md,
   },
-  sectionTitle: {
-    fontSize: Typography.fontSize.xs,
-    fontWeight: Typography.fontWeight.bold,
+  listSectionTitle: {
+    fontSize: 11,
+    fontWeight: '800',
     color: Colors.gray500,
     letterSpacing: 2,
   },
-  liveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.electricGreen,
+  viewAllText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.electricGreen,
+    letterSpacing: 1,
   },
-  matchCard: {
+  listItem: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: Colors.gray800,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
-  matchCardLive: {
-    borderColor: Colors.electricGreen + '4D',
-  },
-  matchInfo: {
+  listLeft: {
     flex: 1,
   },
-  matchTeams: {
-    fontSize: Typography.fontSize.base,
-    fontWeight: Typography.fontWeight.bold,
+  listTeamsText: {
+    marginBottom: 4,
+  },
+  listTeamBold: {
+    fontSize: 16,
+    fontWeight: '800',
     color: Colors.white,
   },
-  matchStatus: {
-    fontSize: Typography.fontSize.xs,
+  listVs: {
+    fontSize: 12,
+    fontWeight: '600',
     color: Colors.gray500,
-    marginTop: 2,
   },
-  emptyState: {
-    alignItems: 'center',
-    paddingTop: Spacing.xxl,
-  },
-  emptyText: {
-    color: Colors.textSecondary,
-    fontSize: Typography.fontSize.base,
-    marginBottom: Spacing.xs,
-  },
-  emptyHint: {
+  listSubtitle: {
+    fontSize: 10,
+    fontWeight: '700',
     color: Colors.gray500,
-    fontSize: Typography.fontSize.sm,
+    letterSpacing: 0.5,
+  },
+  listHighlight: {
+    color: Colors.electricGreen,
+  },
+  listRight: {
+    alignItems: 'flex-end',
+  },
+  listScore: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.white,
+    marginBottom: 4,
+  },
+  statusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  statusBadgeLive: {
+    backgroundColor: Colors.electricGreen + '33',
+  },
+  statusBadgeUpcoming: {
+    backgroundColor: Colors.border,
+  },
+  statusBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1,
+    color: Colors.white,
   },
 });
+

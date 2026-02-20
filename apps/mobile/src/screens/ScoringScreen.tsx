@@ -17,7 +17,8 @@ import {
   Typography,
   type ExtraType,
 } from '@crichead/ui/mobile';
-import { Plus } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { Plus, Settings, ChevronRight, X, ChevronDown } from 'lucide-react-native';
 import {
   useMatchSync,
   calculateInningsStats,
@@ -63,6 +64,7 @@ export default function ScoringScreen({
   initialLocalMatchId,
   onBack,
 }: ScoringScreenProps) {
+  const router = useRouter();
   const [liveMatchId, setLiveMatchId] = useState<string | null>(matchId);
 
   // ---- Firebase sync ----
@@ -72,6 +74,7 @@ export default function ScoringScreen({
     loading: syncLoading,
     error: syncError,
     addBallToMatch,
+    endCurrentInnings,
   } = useMatchSync(liveMatchId, { subscribeToBalls: true });
 
   // ---- Local state ----
@@ -92,11 +95,84 @@ export default function ScoringScreen({
 
   // ---- Tab state ----
   const [activeTab, setActiveTab] = useState<TabKey>('players');
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [expandedSection, setExpandedSection] = useState<string | null>('Match Settings');
 
   const isLiveMode = liveMatchId !== null;
 
   // ---- Stable local match ID for this session ----
   const localMatchIdRef = useRef<string>(initialLocalMatchId ?? generateLocalId());
+  const isMatchEndedRef = useRef<boolean>(false);
+
+  const handleEndInnings = async () => {
+    Alert.alert(
+      'End Innings',
+      'Are you sure you want to end this innings?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'End Innings',
+          style: 'destructive',
+          onPress: async () => {
+            if (isLiveMode) {
+              try {
+                await endCurrentInnings();
+              } catch (e) {
+                console.error('Failed to end current innings', e);
+                Alert.alert('Error', 'Failed to end the innings on the server.');
+              }
+            } else {
+              // Local matches don't support multiple innings yet, but we'll show an alert or mark finished
+              Alert.alert('Not Supported', 'Local matches currently only support single innings mode.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleEndMatch = async () => {
+    Alert.alert(
+      isLiveMode ? 'End Match' : 'Abandon Match',
+      `Are you sure you want to ${isLiveMode ? 'end' : 'abandon'} this match? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: isLiveMode ? 'End Match' : 'Abandon Match',
+          style: 'destructive',
+          onPress: async () => {
+            setShowSettingsModal(false);
+            isMatchEndedRef.current = true;
+            if (isLiveMode && liveMatchId) {
+              const db = getFirebaseDb();
+              const matchRef = doc(db, 'matches', liveMatchId);
+              try {
+                await updateDoc(matchRef, { status: 'abandoned' });
+              } catch (e) {
+                console.error('Failed to end live match', e);
+                Alert.alert('Error', 'Failed to end the match on the server.');
+                isMatchEndedRef.current = false;
+                return;
+              }
+            } else if (!isLiveMode && resolvedConfig) {
+              await saveLocalMatch({
+                id: localMatchIdRef.current,
+                config: resolvedConfig,
+                balls: localBalls,
+                strikerId,
+                nonStrikerId,
+                bowlerId,
+                status: 'abandoned',
+                createdAt: Date.now(), // Fallback if the match didn't exist before this session
+                updatedAt: Date.now()
+              });
+            }
+            router.replace('/(tabs)');
+          }
+        }
+      ]
+    );
+  };
 
   // ---- Load from AsyncStorage when resuming a local match ----
   useEffect(() => {
@@ -130,7 +206,8 @@ export default function ScoringScreen({
   const runRate = calculateRunRate(stats.totalRuns, stats.currentOver, stats.currentBall);
 
   const maxOvers = match?.oversPerInnings ?? resolvedConfig?.oversPerInnings ?? 0;
-  const maxWickets = (match?.playersPerSide ?? resolvedConfig?.playersPerSide ?? 11) - 1;
+  const wicketsPerInnings = match?.wicketsPerInnings ?? resolvedConfig?.wicketsPerInnings ?? 10;
+  const maxWickets = Math.min(wicketsPerInnings, (match?.playersPerSide ?? resolvedConfig?.playersPerSide ?? 11) - 1);
   const matchStatus = match?.status ?? 'live';
   const currentInningsIndex = match?.currentInningsIndex ?? 0;
 
@@ -196,7 +273,6 @@ export default function ScoringScreen({
 
   const availableBatsmen = useMemo(() => {
     return battingTeamPlayers.filter((p) =>
-      (p.role === 'bat' || p.role === 'all') &&
       !dismissedIds.has(p.id) &&
       p.id !== strikerId &&
       p.id !== nonStrikerId
@@ -204,9 +280,7 @@ export default function ScoringScreen({
   }, [battingTeamPlayers, dismissedIds, strikerId, nonStrikerId]);
 
   const availableBowlers = useMemo(() => {
-    return bowlingTeamPlayers.filter((p) =>
-      (p.role === 'bowl' || p.role === 'all')
-    );
+    return bowlingTeamPlayers;
   }, [bowlingTeamPlayers]);
 
   const getPlayerName = useCallback(
@@ -319,7 +393,7 @@ export default function ScoringScreen({
 
   // ---- Persist local match state to AsyncStorage ----
   useEffect(() => {
-    if (isLiveMode || !resolvedConfig) return;
+    if (isLiveMode || !resolvedConfig || isMatchEndedRef.current) return;
     saveLocalMatch({
       id: localMatchIdRef.current,
       config: resolvedConfig,
@@ -327,6 +401,7 @@ export default function ScoringScreen({
       strikerId,
       nonStrikerId,
       bowlerId,
+      status: localBalls.length > 0 ? 'live' : 'upcoming',
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
@@ -586,13 +661,16 @@ export default function ScoringScreen({
           <Text style={styles.liveBadgeText}>{isLiveMode ? 'LIVE MATCH' : 'LOCAL'}</Text>
         </View>
 
-        {!isLiveMode && resolvedConfig ? (
-          <TouchableOpacity onPress={handleGoLive} activeOpacity={0.7}>
-            <Text style={styles.goLiveText}>Go Live</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md }}>
+          {!isLiveMode && resolvedConfig && (
+            <TouchableOpacity onPress={handleGoLive} activeOpacity={0.7} style={{ padding: Spacing.xs }}>
+              <Text style={styles.goLiveText}>Go Live</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={() => setShowSettingsModal(true)} activeOpacity={0.7} style={{ padding: Spacing.xs }}>
+            <Settings size={22} color={Colors.white} />
           </TouchableOpacity>
-        ) : (
-          <View style={{ width: 60 }} />
-        )}
+        </View>
       </View>
 
       {/* ── Scrollable content ── */}
@@ -852,10 +930,31 @@ export default function ScoringScreen({
       {/* ── Scoring Pad (Fixed at bottom) ── */}
       <View style={[styles.scoringPad, scoringDisabled && styles.scoringPadDisabled]}>
         {scoringDisabled ? (
-          <View style={styles.disabledOverlay}>
-            <Text style={styles.disabledText}>
-              {isLiveMode && isMatchFinished ? 'Match has ended' : 'Innings complete'}
-            </Text>
+          <View style={[styles.disabledOverlay, { justifyContent: 'center' }]}>
+            {isLiveMode && isMatchFinished ? (
+              <Text style={styles.disabledText}>Match has ended</Text>
+            ) : (
+              <View style={localStyles.endInningsContainer}>
+                <Text style={styles.disabledText}>Innings complete</Text>
+                <View style={localStyles.endInningsRow}>
+                  <TouchableOpacity
+                    style={[styles.runButton, localStyles.endInningsBtn]}
+                    onPress={handleEndInnings}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.runButtonText, { color: Colors.deepNavy, fontSize: 16 }]}>END INNINGS</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.undoButton, localStyles.undoBtn, !canUndo && styles.undoButtonDisabled]}
+                    onPress={handleUndo}
+                    disabled={!canUndo}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.undoIcon, !canUndo && styles.undoIconDisabled]}>{'\u21A9'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </View>
         ) : !playersReady ? (
           <View style={styles.playerPickContainer}>
@@ -1041,7 +1140,78 @@ export default function ScoringScreen({
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+        {/* ── Settings Modal ── */}
+        <Modal
+          visible={showSettingsModal}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setShowSettingsModal(false)}
+        >
+          <SafeAreaView style={styles.settingsContainer}>
+            <View style={styles.settingsHeader}>
+              <Text style={styles.settingsTitle}>Settings</Text>
+              <TouchableOpacity onPress={() => setShowSettingsModal(false)} style={styles.settingsCloseBtn}>
+                <X size={24} color={Colors.white} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.settingsScroll} showsVerticalScrollIndicator={false}>
+              {/* Match Settings */}
+              <TouchableOpacity style={styles.settingsSectionHeader} onPress={() => setExpandedSection(expandedSection === 'Match Settings' ? null : 'Match Settings')} activeOpacity={0.7}>
+                <Text style={styles.settingsSectionTitle}>Match Settings</Text>
+                {expandedSection === 'Match Settings' ? <ChevronDown size={20} color={Colors.gray400} /> : <ChevronRight size={20} color={Colors.gray400} />}
+              </TouchableOpacity>
+              {expandedSection === 'Match Settings' && (
+                <View style={styles.settingsSectionContent}>
+                  {['Edit Scorecard', 'Change Match Overs', 'Match Rules (WD, NB, WW)', 'Revise Target (DLS/VJD)', 'Add Bonus Runs', 'Give Penalty Runs', 'End / Declare Innings'].map((item) => (
+                    <TouchableOpacity key={item} style={styles.settingsItem} activeOpacity={0.7}>
+                      <Text style={styles.settingsItemText}>{item}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  <TouchableOpacity 
+                    style={styles.settingsItem} 
+                    activeOpacity={0.7}
+                    onPress={handleEndMatch}
+                  >
+                    <Text style={[styles.settingsItemText, { color: Colors.error }]}>{isLiveMode ? 'End Match' : 'Abandon Match'}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Players Settings */}
+              <TouchableOpacity style={styles.settingsSectionHeader} onPress={() => setExpandedSection(expandedSection === 'Players Settings' ? null : 'Players Settings')} activeOpacity={0.7}>
+                <Text style={styles.settingsSectionTitle}>Players Settings</Text>
+                {expandedSection === 'Players Settings' ? <ChevronDown size={20} color={Colors.gray400} /> : <ChevronRight size={20} color={Colors.gray400} />}
+              </TouchableOpacity>
+              {expandedSection === 'Players Settings' && (
+                <View style={styles.settingsSectionContent}>
+                  {['Change Playing Squad', 'Change Bowler', 'Replace Batters', 'Retired Hurt (Batter)'].map((item) => (
+                    <TouchableOpacity key={item} style={styles.settingsItem} activeOpacity={0.7}>
+                      <Text style={styles.settingsItemText}>{item}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {/* Scorer Settings */}
+              <TouchableOpacity style={styles.settingsSectionHeader} onPress={() => setExpandedSection(expandedSection === 'Scorer Settings' ? null : 'Scorer Settings')} activeOpacity={0.7}>
+                <Text style={styles.settingsSectionTitle}>Scorer Settings</Text>
+                {expandedSection === 'Scorer Settings' ? <ChevronDown size={20} color={Colors.gray400} /> : <ChevronRight size={20} color={Colors.gray400} />}
+              </TouchableOpacity>
+              {expandedSection === 'Scorer Settings' && (
+                <View style={styles.settingsSectionContent}>
+                  {['Change Scorer', 'Add Match Officials/Streamer', 'Select Power Play Overs', 'Set Match Breaks (Lunch, Drinks, etc.)', 'Add Scorer Notes'].map((item) => (
+                    <TouchableOpacity key={item} style={styles.settingsItem} activeOpacity={0.7}>
+                      <Text style={styles.settingsItemText}>{item}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+              
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </SafeAreaView>
+        </Modal>
+      </SafeAreaView>
   );
 }
 
@@ -1707,4 +1877,82 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize['2xl'],
     color: Colors.gray500,
   },
+  
+  /* ── Settings Modal ── */
+  settingsContainer: {
+    flex: 1,
+    backgroundColor: Colors.deepNavy,
+  },
+  settingsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: Spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  settingsTitle: {
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.white,
+  },
+  settingsCloseBtn: {
+    padding: Spacing.xs,
+  },
+  settingsScroll: {
+    flex: 1,
+  },
+  settingsSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: Colors.gray800,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    marginTop: Spacing.md,
+  },
+  settingsSectionTitle: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.gray300,
+    letterSpacing: 1,
+  },
+  settingsSectionContent: {
+    backgroundColor: Colors.deepNavy,
+  },
+  settingsItem: {
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  settingsItemText: {
+    fontSize: Typography.fontSize.base,
+    color: Colors.white,
+  },
+});
+
+const localStyles = StyleSheet.create({
+  endInningsContainer: {
+    alignItems: 'center',
+    gap: Spacing.md,
+    width: '100%',
+  },
+  endInningsRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    width: '100%',
+  },
+  endInningsBtn: {
+    flex: 3,
+    height: 56,
+    backgroundColor: Colors.electricGreen,
+    borderColor: Colors.electricGreen,
+  },
+  undoBtn: {
+    flex: 1,
+    height: 56,
+  }
 });

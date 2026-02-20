@@ -54,6 +54,7 @@ interface Props {
 export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
   const [overs, setOvers] = useState(20);
   const [playersPerSide, setPlayersPerSide] = useState(11);
+  const [wickets, setWickets] = useState(10);
   const [tossWinner, setTossWinner] = useState<string | null>(null);
   const [tossDecision, setTossDecision] = useState<TossDecision | null>(null);
   const [liveMode, setLiveMode] = useState(true);
@@ -70,6 +71,11 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
   function handlePlayersChange(delta: number) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setPlayersPerSide((prev) => Math.max(2, Math.min(11, prev + delta)));
+  }
+
+  function handleWicketsChange(delta: number) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setWickets((prev) => Math.max(1, Math.min(10, prev + delta)));
   }
 
   async function handleStartMatch() {
@@ -101,6 +107,7 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
         },
         oversPerInnings: overs,
         playersPerSide,
+        wicketsPerInnings: wickets,
       };
 
       if (liveMode) {
@@ -241,6 +248,28 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
               <TouchableOpacity
                 style={styles.stepperBtn}
                 onPress={() => handlePlayersChange(1)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.stepperBtnText}>+</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Wickets per Innings */}
+          <View style={styles.settingRow}>
+            <Text style={styles.settingLabel}>Wickets</Text>
+            <View style={styles.stepper}>
+              <TouchableOpacity
+                style={styles.stepperBtn}
+                onPress={() => handleWicketsChange(-1)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.stepperBtnText}>-</Text>
+              </TouchableOpacity>
+              <Text style={styles.stepperValue}>{wickets}</Text>
+              <TouchableOpacity
+                style={styles.stepperBtn}
+                onPress={() => handleWicketsChange(1)}
                 activeOpacity={0.7}
               >
                 <Text style={styles.stepperBtnText}>+</Text>

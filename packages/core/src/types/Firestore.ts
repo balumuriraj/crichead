@@ -29,6 +29,7 @@ export interface FirestoreMatchDoc {
   playingXI?: Record<string, PlayingXIEntry[]>;
   oversPerInnings?: number;
   playersPerSide?: number;
+  wicketsPerInnings?: number;
   currentStrikerId?: string | null;
   currentNonStrikerId?: string | null;
   currentBowlerId?: string | null;

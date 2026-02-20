@@ -188,6 +188,7 @@ export default function SelectRosterScreen({
           [teamB.id]: xiB,
         },
         oversPerInnings: config?.oversPerInnings ?? 20,
+        wicketsPerInnings: config?.wicketsPerInnings ?? 10,
         playersPerSide: Math.max(xiA.length, xiB.length),
       };
 

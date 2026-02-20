@@ -38,6 +38,7 @@ export default function MatchDetailsScreen({ onNext, onCancel }: Props) {
   const [venue, setVenue] = useState('');
   const [tournament, setTournament] = useState('');
   const [scheduledDate] = useState(() => new Date().toISOString());
+  const [wickets, setWickets] = useState(10);
 
   function handleFormatSelect(f: MatchFormat) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -51,11 +52,17 @@ export default function MatchDetailsScreen({ onNext, onCancel }: Props) {
     setOvers((prev) => Math.max(1, Math.min(100, prev + delta)));
   }
 
+  function handleWicketsChange(delta: number) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setWickets((prev) => Math.max(1, Math.min(100, prev + delta)));
+  }
+
   function handleNext() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onNext({
       format,
       oversPerInnings: format === 'test' ? 0 : overs,
+      wicketsPerInnings: wickets,
       venue: venue.trim(),
       scheduledDate,
       tournament: tournament.trim(),
@@ -162,6 +169,28 @@ export default function MatchDetailsScreen({ onNext, onCancel }: Props) {
             </View>
           </View>
         )}
+
+        {/* Wickets per Innings */}
+        <View style={styles.oversRow}>
+          <Text style={styles.oversLabel}>Wickets per Innings</Text>
+          <View style={styles.stepper}>
+            <TouchableOpacity
+              style={styles.stepperButton}
+              onPress={() => handleWicketsChange(-1)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.stepperButtonText}>-</Text>
+            </TouchableOpacity>
+            <Text style={styles.oversValue}>{wickets}</Text>
+            <TouchableOpacity
+              style={styles.stepperButton}
+              onPress={() => handleWicketsChange(1)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.stepperButtonText}>+</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
         {/* Venue */}
         <Text style={styles.sectionLabel}>VENUE</Text>

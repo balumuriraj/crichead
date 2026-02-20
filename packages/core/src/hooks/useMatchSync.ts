@@ -29,6 +29,9 @@ export interface UseMatchSyncReturn {
   error: Error | null;
   /** Add a ball to the current innings atomically */
   addBallToMatch: (ball: Ball) => Promise<void>;
+  
+  /** Manually trigger the end of the current innings (transitions to 2nd innings or finishes match) */
+  endCurrentInnings: () => Promise<void>;
 }
 
 export function useMatchSync(
@@ -220,48 +223,12 @@ export function useMatchSync(
             ballCount: newBallCount,
           };
 
-          // Check if innings should end
-          const maxOvers = matchData.oversPerInnings ?? 0; // 0 = unlimited (test)
-          const maxWickets = (matchData.playersPerSide ?? 11) - 1;
-
-          const { currentOver: newOver, currentBall: newBall } =
-            parseOvers(newOvers);
-          const allOversCompleted =
-            maxOvers > 0 && newOver >= maxOvers && newBall === 0;
-          const allOut = newTotalWickets >= maxWickets;
-          const inningsEnded = allOversCompleted || allOut;
-
           const updatePayload: Record<string, unknown> = {
             innings: updatedInnings,
           };
 
-          if (inningsEnded) {
-            const isFirstInnings = inningsIndex === 0;
-            if (isFirstInnings) {
-              // Transition to second innings
-              const secondBattingTeamId =
-                currentInnings.teamId === matchData.teamA
-                  ? matchData.teamB
-                  : matchData.teamA;
-
-              updatedInnings.push({
-                teamId: secondBattingTeamId,
-                totalRuns: 0,
-                totalWickets: 0,
-                overs: 0,
-                ballCount: 0,
-              });
-
-              updatePayload.innings = updatedInnings;
-              updatePayload.currentInningsIndex = 1;
-            } else {
-              // Second innings ended — match is finished
-              updatePayload.status = 'finished';
-            }
-          }
-
           // Check if chasing team has exceeded target (second innings only)
-          if (inningsIndex === 1 && !inningsEnded) {
+          if (inningsIndex === 1) {
             const firstInningsRuns = matchData.innings[0]?.totalRuns ?? 0;
             if (newTotalRuns > firstInningsRuns) {
               // Chasing team wins — match finished
@@ -283,11 +250,76 @@ export function useMatchSync(
     [matchId]
   );
 
+  const endCurrentInnings = useCallback(async () => {
+    if (!matchId) {
+      throw new Error('No matchId provided');
+    }
+
+    const db = getFirebaseDb();
+    const matchDocRef = doc(db, 'matches', matchId);
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const matchSnap = await transaction.get(matchDocRef);
+        if (!matchSnap.exists()) {
+          throw new Error(`Match ${matchId} not found`);
+        }
+
+        const matchData = matchSnap.data() as Omit<FirestoreMatchDoc, 'id'>;
+        if (matchData.status !== 'live') {
+          return;
+        }
+
+        const inningsIndex = matchData.currentInningsIndex;
+        const currentInnings = matchData.innings[inningsIndex];
+
+        if (!currentInnings) {
+          throw new Error(`Innings at index ${inningsIndex} not found`);
+        }
+
+        const updatePayload: Record<string, unknown> = {};
+        const updatedInnings = [...matchData.innings];
+
+        const isFirstInnings = inningsIndex === 0;
+        if (isFirstInnings) {
+          // Transition to second innings
+          const secondBattingTeamId =
+            currentInnings.teamId === matchData.teamA
+              ? matchData.teamB
+              : matchData.teamA;
+
+          updatedInnings.push({
+            teamId: secondBattingTeamId,
+            totalRuns: 0,
+            totalWickets: 0,
+            overs: 0,
+            ballCount: 0,
+          });
+
+          updatePayload.innings = updatedInnings;
+          updatePayload.currentInningsIndex = 1;
+        } else {
+          // Second innings ended — match is finished
+          updatePayload.status = 'finished';
+        }
+
+        transaction.update(matchDocRef, updatePayload);
+      });
+    } catch (err) {
+      const txError = err instanceof Error ? err : new Error(String(err));
+      if (mountedRef.current) {
+        setError(txError);
+      }
+      throw txError;
+    }
+  }, [matchId]);
+
   return {
     match,
     currentInningsBalls,
     loading,
     error,
     addBallToMatch,
+    endCurrentInnings,
   };
 }
