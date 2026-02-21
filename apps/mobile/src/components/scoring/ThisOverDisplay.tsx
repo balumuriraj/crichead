@@ -1,15 +1,15 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { Colors, Spacing, Typography } from '@crichead/ui/mobile';
-import { formatBallDisplay, type Ball } from '@crichead/core';
+import { formatBallDisplay, EventSchema } from '@crichead/core';
 
 export interface ThisOverDisplayProps {
-  balls: Ball[];
+  balls: EventSchema.BallEvent[];
 }
 
 export function ThisOverDisplay({ balls }: ThisOverDisplayProps) {
   const validBallCount = balls.filter((b) => {
-    const isExtra = b?.extras?.type === 'wd' || b?.extras?.type === 'nb';
+    const isExtra = b?.deliveryType === 'wide' || b?.deliveryType === 'no-ball';
     return !isExtra;
   }).length;
 
@@ -23,7 +23,7 @@ export function ThisOverDisplay({ balls }: ThisOverDisplayProps) {
       >
         {balls.map((ball, i) => {
           const isWicket = !!ball.wicket;
-          const isBoundary = (ball.runs === 4 || ball.runs === 6) && !ball.extras;
+          const isBoundary = (ball.runs.bat === 4 || ball.runs.bat === 6) && ball.deliveryType === 'legal';
           return (
             <View
               key={i}

@@ -61,7 +61,12 @@ export interface FirebaseAdminConfig {
  * const { app, auth, db } = initializeFirebaseAdmin();
  * ```
  */
-export function initializeFirebaseAdmin(config?: FirebaseAdminConfig) {
+export function initializeFirebaseAdmin(config?: FirebaseAdminConfig): {
+  app: admin.app.App;
+  auth: admin.auth.Auth;
+  db: admin.firestore.Firestore;
+  storage: admin.storage.Storage;
+} {
   // Check if admin is already initialized
   if (!adminApp) {
     try {

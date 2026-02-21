@@ -1,15 +1,15 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors, Spacing, Typography, BorderRadius } from '@crichead/ui/mobile';
-import { computeBatsmenStats, computeBowlerStats } from '@crichead/core';
+import { EventScoring } from '@crichead/core';
 
 export interface PlayersTabContentProps {
   strikerId: string | null;
   nonStrikerId: string | null;
   bowlerId: string | null;
   getPlayerName: (id: string | null) => string;
-  batsmenStatsMap: ReturnType<typeof computeBatsmenStats>;
-  bowlerStatsMap: ReturnType<typeof computeBowlerStats>;
+  batsmenStatsMap: Record<string, EventScoring.BatterStats>;
+  bowlerStatsMap: Record<string, EventScoring.BowlerStats>;
 }
 
 export function PlayersTabContent({
@@ -20,17 +20,17 @@ export function PlayersTabContent({
   batsmenStatsMap,
   bowlerStatsMap,
 }: PlayersTabContentProps) {
-  const strikerStats = strikerId ? batsmenStatsMap.get(strikerId) : null;
+  const strikerStats = strikerId ? batsmenStatsMap[strikerId] : null;
   const strikerRuns = strikerStats?.runs ?? 0;
-  const strikerBalls = strikerStats?.balls ?? 0;
+  const strikerBalls = strikerStats?.ballsFaced ?? 0;
   const strikerSR = strikerBalls > 0 ? ((strikerRuns / strikerBalls) * 100).toFixed(0) : '0';
 
-  const nonStrikerStats = nonStrikerId ? batsmenStatsMap.get(nonStrikerId) : null;
+  const nonStrikerStats = nonStrikerId ? batsmenStatsMap[nonStrikerId] : null;
   const nonStrikerRuns = nonStrikerStats?.runs ?? 0;
-  const nonStrikerBalls = nonStrikerStats?.balls ?? 0;
+  const nonStrikerBalls = nonStrikerStats?.ballsFaced ?? 0;
   const nonStrikerSR = nonStrikerBalls > 0 ? ((nonStrikerRuns / nonStrikerBalls) * 100).toFixed(0) : '0';
 
-  const bowlerStats = bowlerId ? bowlerStatsMap.get(bowlerId) : null;
+  const bowlerStats = bowlerId ? bowlerStatsMap[bowlerId] : null;
   const validBalls = bowlerStats?.validBalls ?? 0;
   const bowlerOvers = `${Math.floor(validBalls / 6)}.${validBalls % 6}`;
   const bowlerRuns = bowlerStats?.runs ?? 0;

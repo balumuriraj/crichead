@@ -157,7 +157,7 @@ export default function ScoringScreen({
 
         {scoring.isInningsComplete && (
           <InningsEndBanner
-            isMatch={scoring.isLiveMode && scoring.isMatchFinished}
+            isMatch={scoring.isMatchFinished}
             reason={scoring.inningsEndReason}
             score={scoring.inningsEndScore}
           />
@@ -205,7 +205,18 @@ export default function ScoringScreen({
             </TouchableOpacity>
           </View>
         )}
-        {scoring.scoringDisabled ? (
+        {scoring.scoringDisabled && scoring.isMatchFinished ? (
+          <View style={styles.matchEndedContainer}>
+            <Text style={styles.matchEndedText}>Match finished</Text>
+            <TouchableOpacity
+              style={styles.reviewOverButton}
+              onPress={() => scoring.setShowOverCompleteModal(true)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.reviewOverButtonText}>View Summary</Text>
+            </TouchableOpacity>
+          </View>
+        ) : scoring.scoringDisabled ? (
           <InningsCompletePad
             isMatchFinished={scoring.isMatchFinished}
             isLiveMode={scoring.isLiveMode}
@@ -213,7 +224,7 @@ export default function ScoringScreen({
             onEndInnings={scoring.handleEndInnings}
             onUndo={scoring.handleUndo}
           />
-        ) : !scoring.playersReady ? (
+        ) : !scoring.playersReady && !(scoring.isOverCompleteWaiting && !scoring.showOverCompleteModal) ? (
           <PlayerPickerCards
             strikerId={scoring.strikerId}
             nonStrikerId={scoring.nonStrikerId}
@@ -246,7 +257,7 @@ export default function ScoringScreen({
       />
 
       {(() => {
-        const bowlerStats = scoring.bowlerId ? scoring.bowlerStatsMap.get(scoring.bowlerId) : null;
+        const bowlerStats = scoring.bowlerId ? scoring.bowlerStatsMap[scoring.bowlerId] : null;
         const validBalls = bowlerStats?.validBalls ?? 0;
         const bOvers = `${Math.floor(validBalls / 6)}.${validBalls % 6}`;
         const bMaidens = 0; // Not tracked in local stats currently
@@ -518,12 +529,30 @@ const styles = StyleSheet.create({
   reviewOverPrompt: {
     marginBottom: Spacing.md,
   },
+  reviewOverRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+  },
   reviewOverButton: {
     backgroundColor: Colors.electricGreen,
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.lg,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  reviewOverUndoButton: {
+    flex: 1,
+    height: 48,
+    backgroundColor: Colors.gray700,
+    borderRadius: BorderRadius.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.gray600,
+  },
+  reviewOverUndoIcon: {
+    fontSize: Typography.fontSize.xl,
+    color: Colors.white,
   },
   reviewOverButtonText: {
     color: Colors.deepNavy,
@@ -540,5 +569,17 @@ const styles = StyleSheet.create({
   settingsItemText: {
     fontSize: Typography.fontSize.base,
     color: Colors.white,
+  },
+  matchEndedContainer: {
+    paddingVertical: Spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.md,
+  },
+  matchEndedText: {
+    fontSize: Typography.fontSize.base,
+    fontWeight: Typography.fontWeight.bold,
+    color: Colors.textSecondary,
+    letterSpacing: 1,
   },
 });

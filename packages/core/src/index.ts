@@ -16,6 +16,13 @@ export * from './hooks';
 // Export constants
 export * from './constants/navigation';
 
+// --- New Event-Stream Architecture --- //
+export * as EventSchema from './schema';
+export * as EventScoring from './scoring';
+export * from './scoring/migrations';
+export * as EventStore from './store';
+export * from './scoring/actions';
+
 /**
  * Firebase Admin SDK Usage:
  *

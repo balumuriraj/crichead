@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, SafeAreaView } from 'react-native';
 import { Colors, Spacing, Typography, BorderRadius } from '@crichead/ui/mobile';
-import { type Ball, formatBallDisplay } from '@crichead/core';
+import { EventSchema, formatBallDisplay } from '@crichead/core';
 import { Zap, UserPlus, Edit2 } from 'lucide-react-native';
 
 interface OverCompleteModalProps {
@@ -11,7 +11,7 @@ interface OverCompleteModalProps {
   bowlerName: string;
   bowlerRole?: string;
   bowlerFigures: string; // e.g., "1.0-0-16-0"
-  balls: Ball[];
+  balls: EventSchema.BallEvent[];
   isInningsComplete?: boolean;
   isMatchFinished?: boolean;
   onStartNextOver: () => void;
@@ -38,8 +38,7 @@ export function OverCompleteModal({
   const overRuns = useMemo(() => {
     let sum = 0;
     for (const b of balls) {
-      sum += b.runs;
-      if (b.extras?.runs) sum += b.extras.runs;
+      sum += b.runs.bat + b.runs.extra + b.runs.penalty;
     }
     return sum;
   }, [balls]);
@@ -77,7 +76,7 @@ export function OverCompleteModal({
             <View style={styles.ballsContainer}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.ballsScroll}>
                 {balls.map((ball, i) => {
-                  const isBoundary = (ball.runs === 4 || ball.runs === 6) && !ball.extras;
+                  const isBoundary = (ball.runs.bat === 4 || ball.runs.bat === 6) && ball.deliveryType === 'legal';
                   return (
                     <View key={i} style={styles.ballWrapper}>
                       <View

@@ -11,9 +11,8 @@ import {
   limit,
 } from 'firebase/firestore';
 import { getFirebaseDb } from '../firebase/client';
-import type { Ball } from '../types';
+import type { BallEvent } from '../schema/ballEvent';
 import type { FirestoreMatchDoc } from '../types/Firestore';
-import { parseOvers } from '../utils/scoring';
 
 export interface UseMatchSyncOptions {
   /** Subscribe to balls for the current innings. Default: false */
@@ -24,13 +23,13 @@ export interface UseMatchSyncReturn {
   /** The match document data, or null if not yet loaded */
   match: FirestoreMatchDoc | null;
   /** Balls for the current innings (only populated if subscribeToBalls is true) */
-  currentInningsBalls: Ball[];
+  currentInningsBalls: BallEvent[];
   /** Whether the initial snapshot is still loading */
   loading: boolean;
   /** Error from snapshot listener or transaction, null if none */
   error: Error | null;
   /** Add a ball to the current innings atomically */
-  addBallToMatch: (ball: Ball) => Promise<void>;
+  addBallToMatch: (ball: BallEvent) => Promise<void>;
   
   /** Manually trigger the end of the current innings (transitions to 2nd innings or finishes match) */
   /** Manually trigger the end of the current innings (transitions to 2nd innings or finishes match) */
@@ -47,7 +46,7 @@ export function useMatchSync(
   const { subscribeToBalls = false } = options;
 
   const [match, setMatch] = useState<FirestoreMatchDoc | null>(null);
-  const [currentInningsBalls, setCurrentInningsBalls] = useState<Ball[]>([]);
+  const [currentInningsBalls, setCurrentInningsBalls] = useState<BallEvent[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -120,17 +119,7 @@ export function useMatchSync(
       (snapshot) => {
         if (!mountedRef.current) return;
 
-        const balls: Ball[] = snapshot.docs.map((d) => {
-          const data = d.data();
-          return {
-            bowlerId: data.bowlerId,
-            strikerId: data.strikerId,
-            runs: data.runs,
-            extras: data.extras ?? null,
-            wicket: data.wicket ?? null,
-            commentary: data.commentary,
-          };
-        });
+        const balls: BallEvent[] = snapshot.docs.map((d) => d.data() as BallEvent);
         setCurrentInningsBalls(balls);
       },
       (err) => {
@@ -144,7 +133,7 @@ export function useMatchSync(
 
   // addBallToMatch transaction
   const addBallToMatch = useCallback(
-    async (ball: Ball): Promise<void> => {
+    async (ball: BallEvent): Promise<void> => {
       if (!matchId) {
         throw new Error('No matchId provided');
       }
@@ -179,28 +168,6 @@ export function useMatchSync(
             throw new Error(`Innings at index ${inningsIndex} not found`);
           }
 
-          // Calculate new stats incrementally (O(1))
-          const newTotalRuns =
-            currentInnings.totalRuns + ball.runs + (ball.extras?.runs ?? 0);
-          const newTotalWickets =
-            currentInnings.totalWickets + (ball.wicket ? 1 : 0);
-          const newBallCount = currentInnings.ballCount + 1;
-
-          const isValidDelivery =
-            !ball.extras ||
-            (ball.extras.type !== 'wd' && ball.extras.type !== 'nb');
-
-          let newOvers = currentInnings.overs;
-          if (isValidDelivery) {
-            const { currentOver, currentBall } = parseOvers(
-              currentInnings.overs
-            );
-            const totalValidBalls = currentOver * 6 + currentBall + 1;
-            const nextOver = Math.floor(totalValidBalls / 6);
-            const nextBall = totalValidBalls % 6;
-            newOvers = parseFloat(`${nextOver}.${nextBall}`);
-          }
-
           // Add ball to subcollection
           const ballDocRef = doc(
             collection(
@@ -210,7 +177,8 @@ export function useMatchSync(
               'innings',
               String(inningsIndex),
               'balls'
-            )
+            ),
+            ball.id
           );
 
           transaction.set(ballDocRef, {
@@ -218,6 +186,23 @@ export function useMatchSync(
             sequence: currentInnings.ballCount,
             timestamp: serverTimestamp(),
           });
+
+          // Note: In the new Event-Stream architecture, the `getMatchStatus` engine derives
+          // totalRuns, totalWickets, and overs natively from the list of events.
+          // However, we still increment the high-level match fields here so that listeners looking
+          // purely at the `match` document (e.g., match lists) can show live preview scores.
+          const newTotalRuns = currentInnings.totalRuns + ball.runs.bat + ball.runs.extra + (ball.runs.penalty || 0);
+          const newTotalWickets = currentInnings.totalWickets + (ball.wicket ? 1 : 0);
+          const newBallCount = currentInnings.ballCount + 1;
+          
+          let newOvers = currentInnings.overs;
+          const isLegal = ball.deliveryType === 'legal' || ball.deliveryType === 'bye' || ball.deliveryType === 'leg-bye';
+          if (isLegal) {
+             const over = Math.floor(currentInnings.overs);
+             const subBall = Math.round((currentInnings.overs - over) * 10);
+             const nextBalls = subBall + 1;
+             newOvers = nextBalls === 6 ? over + 1 : over + (nextBalls / 10);
+          }
 
           // Update match document innings summary
           const updatedInnings = [...matchData.innings];
@@ -378,18 +363,20 @@ export function useMatchSync(
           throw new Error('Ball count mismatch: another device may have scored.');
         }
 
-        const newTotalRuns = Math.max(0, currentInnings.totalRuns - lastBallData.runs - (lastBallData.extras?.runs ?? 0));
+        const newTotalRuns = Math.max(0, currentInnings.totalRuns - (lastBallData.runs.bat + lastBallData.runs.extra + (lastBallData.runs.penalty || 0)));
         const newTotalWickets = Math.max(0, currentInnings.totalWickets - (lastBallData.wicket ? 1 : 0));
         const newBallCount = Math.max(0, currentInnings.ballCount - 1);
 
         let newOvers = currentInnings.overs;
-        const isValidDelivery = !lastBallData.extras || (lastBallData.extras.type !== 'wd' && lastBallData.extras.type !== 'nb');
-        if (isValidDelivery) {
-          const { currentOver, currentBall } = parseOvers(currentInnings.overs);
-          const totalValidBalls = Math.max(0, currentOver * 6 + currentBall - 1);
-          const prevOver = Math.floor(totalValidBalls / 6);
-          const prevBall = totalValidBalls % 6;
-          newOvers = parseFloat(`${prevOver}.${prevBall}`);
+        const isLegal = lastBallData.deliveryType === 'legal' || lastBallData.deliveryType === 'bye' || lastBallData.deliveryType === 'leg-bye';
+        if (isLegal) {
+             const over = Math.floor(currentInnings.overs);
+             const subBall = Math.round((currentInnings.overs - over) * 10);
+             if (subBall === 0 && over > 0) {
+                 newOvers = (over - 1) + 0.5;
+             } else {
+                 newOvers = over + ((subBall - 1) / 10);
+             }
         }
 
         // Delete the ball

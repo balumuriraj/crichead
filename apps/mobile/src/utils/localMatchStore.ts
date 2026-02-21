@@ -1,11 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { QuickMatchConfig } from '../types/QuickMatchConfig';
-import type { Ball } from '@crichead/core';
+import type { EventSchema } from '@crichead/core';
 
 export interface LocalMatchRecord {
   id: string;
   config: QuickMatchConfig;
-  balls: Ball[];
+  balls: EventSchema.BallEvent[];
   strikerId: string | null;
   nonStrikerId: string | null;
   bowlerId: string | null;

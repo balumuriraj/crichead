@@ -1,10 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors, Spacing, Typography, BorderRadius } from '@crichead/ui/mobile';
-import { formatBallDisplay, type Ball } from '@crichead/core';
+import { formatBallDisplay, EventSchema } from '@crichead/core';
 
 export interface CommentaryTabContentProps {
-  balls: Ball[];
+  balls: EventSchema.BallEvent[];
 }
 
 export function CommentaryTabContent({ balls }: CommentaryTabContentProps) {
@@ -24,9 +24,9 @@ export function CommentaryTabContent({ balls }: CommentaryTabContentProps) {
         .map((ball, index) => {
           const actualIndex = balls.length - index - 1;
           const isWicket = !!ball.wicket;
-          const isBoundary = (ball.runs === 4 || ball.runs === 6) && !ball.extras;
+          const isBoundary = (ball.runs.bat === 4 || ball.runs.bat === 6) && ball.deliveryType === 'legal';
           return (
-            <View key={`${actualIndex}-${ball.commentary}`} style={styles.commRow}>
+            <View key={`${actualIndex}-${ball.metadata?.commentary || ball.id}`} style={styles.commRow}>
               <View style={[
                 styles.commBallBadge,
                 isWicket && styles.commBallBadgeWicket,
@@ -39,7 +39,7 @@ export function CommentaryTabContent({ balls }: CommentaryTabContentProps) {
                   {formatBallDisplay(ball)}
                 </Text>
               </View>
-              <Text style={styles.commText}>{ball.commentary}</Text>
+              <Text style={styles.commText}>{String(ball.metadata?.commentary || '...')}</Text>
             </View>
           );
         })}

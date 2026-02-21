@@ -4,13 +4,15 @@ import { useRouter } from 'expo-router';
 import { type ExtraType } from '@crichead/ui/mobile';
 import {
   useMatchSync,
-  calculateInningsStats,
-  formatOvers,
-  calculateRunRate,
-  computeBatsmenStats,
-  computeBowlerStats,
   getFirebaseDb,
-  type Ball,
+  EventSchema,
+  EventScoring,
+  migrateBallToEvent,
+  useScoringEngine,
+  createScoreEvent,
+  createExtraEvent,
+  createWicketEvent,
+  createPenaltyEvent,
 } from '@crichead/core';
 import { addDoc, collection, updateDoc, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import type { QuickMatchConfig } from '../types/QuickMatchConfig';
@@ -52,11 +54,11 @@ export interface ScoringState {
   currentOverFormatted: string;
   runRate: number;
   // Stats
-  balls: Ball[];
-  stats: ReturnType<typeof calculateInningsStats>;
-  currentOverBalls: Ball[];
-  batsmenStatsMap: ReturnType<typeof computeBatsmenStats>;
-  bowlerStatsMap: ReturnType<typeof computeBowlerStats>;
+  balls: EventSchema.BallEvent[];
+  stats: EventScoring.DerivedMatchState;
+  currentOverBalls: EventSchema.BallEvent[];
+  batsmenStatsMap: Record<string, EventScoring.BatterStats>;
+  bowlerStatsMap: Record<string, EventScoring.BowlerStats>;
   // Match state
   maxOvers: number;
   maxWickets: number;
@@ -105,7 +107,7 @@ export interface ScoringState {
   handleEndInnings: () => Promise<void>;
   handleEndMatch: () => Promise<void>;
   handleStartNextOver: () => void;
-  completedOverBalls: Ball[];
+  completedOverBalls: EventSchema.BallEvent[];
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +129,7 @@ export function useScoringState({
   const router = useRouter();
 
   // ---- Local state ----
-  const [localBalls, setLocalBalls] = useState<Ball[]>([]);
+  const [localBalls, setLocalBalls] = useState<EventSchema.BallEvent[]>([]);
   const [resolvedConfig, setResolvedConfig] = useState<QuickMatchConfig | undefined>(config);
   const [localLoading, setLocalLoading] = useState(!!initialLocalMatchId);
 
@@ -160,7 +162,9 @@ export function useScoringState({
     loadLocalMatch(initialLocalMatchId).then((record) => {
       if (record) {
         setResolvedConfig(record.config);
-        setLocalBalls(record.balls);
+        setLocalBalls((record.balls as any[]).map(b => 
+          b.deliveryType ? b : migrateBallToEvent(b, record.id, String(record.currentInningsIndex || 0))
+        ));
         setStrikerId(record.strikerId);
         setNonStrikerId(record.nonStrikerId);
         setBowlerId(record.bowlerId);
@@ -175,221 +179,63 @@ export function useScoringState({
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ---- Derived state ----
+  // ---- Derived state via core engine ----
   const balls = localBalls;
 
-  const stats = useMemo(() => calculateInningsStats(balls), [balls]);
+  const engineState = useScoringEngine({
+    balls,
+    config: resolvedConfig,
+    match,
+    isLiveMode,
+    localCurrentInningsIndex,
+    localFirstInningsRuns,
+    strikerId,
+    nonStrikerId,
+    bowlerId,
+  });
 
-  const currentOverFormatted = formatOvers(stats.currentOver, stats.currentBall);
-  const runRate = calculateRunRate(stats.totalRuns, stats.currentOver, stats.currentBall);
+  const {
+    stats,
+    currentOverFormatted,
+    runRate,
+    maxOvers,
+    maxWickets,
+    matchStatus,
+    currentInningsIndex,
+    firstInningsRuns,
+    isChasing,
+    allOversCompleted,
+    allOut,
+    targetReached,
+    isMatchFinished,
+    isInningsComplete,
+    playersReady,
+    battingTeamId,
+    bowlingTeamId,
+    battingTeamPlayers,
+    bowlingTeamPlayers,
+    allPlayers,
+    availableBatsmen,
+    availableBowlers,
+    getPlayerName,
+    currentOverBalls,
+    completedOverBalls,
+    inningsEndReason,
+    inningsEndScore,
+    displayTeamName,
+    canUndo,
+  } = engineState;
 
-  const maxOvers = match?.oversPerInnings ?? resolvedConfig?.oversPerInnings ?? 0;
-  const wicketsPerInnings = match?.wicketsPerInnings ?? resolvedConfig?.wicketsPerInnings ?? 10;
-  const maxWickets = Math.min(wicketsPerInnings, (match?.playersPerSide ?? resolvedConfig?.playersPerSide ?? 11) - 1);
-  const matchStatus = match?.status ?? 'live';
-  const currentInningsIndex = isLiveMode ? (match?.currentInningsIndex ?? 0) : localCurrentInningsIndex;
-
-  const firstInningsRuns = isLiveMode
-    ? (match && match.innings.length > 1 ? match.innings[0].totalRuns : null)
-    : localFirstInningsRuns;
-  const isChasing = currentInningsIndex === 1 && firstInningsRuns !== null;
-
-  const allOversCompleted =
-    maxOvers > 0 && stats.currentOver >= maxOvers && stats.currentBall === 0;
-  const allOut = stats.totalWickets >= maxWickets;
-  const targetReached = isChasing && firstInningsRuns !== null && stats.totalRuns > firstInningsRuns;
-  
-  const isMatchFinished = isLiveMode 
-    ? matchStatus === 'finished' 
-    : (currentInningsIndex === 1 && (allOversCompleted || allOut || targetReached));
-    
-  const isInningsComplete = allOversCompleted || allOut || targetReached || (isLiveMode && isMatchFinished);
+  const batsmenStatsMap = stats.batterStats;
+  const bowlerStatsMap = stats.bowlerStats;
 
   // We consider an over "just completed" if stats.currentBall === 0 and bowlerId === (the bowler of the last ball)
-  const lastBallBowlerIdForInput = balls.length > 0 ? balls[balls.length - 1].bowlerId : null;
+  const lastBallBowlerIdForInput = balls.length > 0 ? balls[balls.length - 1]!.bowlerId : null;
   const isOverCompleteWaiting = stats.currentOver > 0 && stats.currentBall === 0 && (bowlerId === null || bowlerId === lastBallBowlerIdForInput);
 
   // If we are waiting for an over completion action (modal is up, or user selected "Edit This Over"),
   // do not lock the UI into the "Innings Complete" pad yet so they can undo or review.
   const scoringDisabled = isInningsComplete && !showOverCompleteModal && !isOverCompleteWaiting;
-
-  const playersReady = strikerId !== null && nonStrikerId !== null && bowlerId !== null;
-
-  // ---- Batting/bowling team IDs ----
-  const battingTeamId: string | null = isLiveMode
-    ? (match?.innings[currentInningsIndex]?.teamId ?? null)
-    : resolvedConfig
-      ? (localCurrentInningsIndex === 0
-          ? (resolvedConfig.toss.decision === 'bat'
-              ? resolvedConfig.toss.winner
-              : resolvedConfig.toss.winner === resolvedConfig.teamA
-                ? resolvedConfig.teamB
-                : resolvedConfig.teamA)
-          : (resolvedConfig.toss.decision === 'bat'
-              ? (resolvedConfig.toss.winner === resolvedConfig.teamA ? resolvedConfig.teamB : resolvedConfig.teamA)
-              : resolvedConfig.toss.winner)
-        )
-      : null;
-
-  const bowlingTeamId: string | null =
-    battingTeamId && resolvedConfig
-      ? (battingTeamId === resolvedConfig.teamA ? resolvedConfig.teamB : resolvedConfig.teamA)
-      : isLiveMode && battingTeamId && match
-        ? (match.teamA === battingTeamId ? match.teamB : match.teamA)
-        : null;
-
-  const battingTeamPlayers = useMemo((): PlayerInfo[] => {
-    if (!battingTeamId) return [];
-    const xi = isLiveMode ? match?.playingXI : resolvedConfig?.playingXI;
-    if (!xi) return [];
-    return (xi[battingTeamId] ?? []).map((p) => ({ id: p.id, name: p.name, role: p.role }));
-  }, [isLiveMode, match, resolvedConfig, battingTeamId]);
-
-  const bowlingTeamPlayers = useMemo((): PlayerInfo[] => {
-    if (!bowlingTeamId) return [];
-    const xi = isLiveMode ? match?.playingXI : resolvedConfig?.playingXI;
-    if (!xi) return [];
-    return (xi[bowlingTeamId] ?? []).map((p) => ({ id: p.id, name: p.name, role: p.role }));
-  }, [isLiveMode, match, resolvedConfig, bowlingTeamId]);
-
-  const allPlayers = useMemo((): PlayerInfo[] => {
-    return [...battingTeamPlayers, ...bowlingTeamPlayers].filter(
-      (p, i, arr) => arr.findIndex((x) => x.id === p.id) === i,
-    );
-  }, [battingTeamPlayers, bowlingTeamPlayers]);
-
-  const dismissedIds = useMemo(() => {
-    const dismissed = new Set<string>();
-    for (const b of balls) {
-      if (b.wicket) dismissed.add(b.strikerId);
-    }
-    return dismissed;
-  }, [balls]);
-
-  const availableBatsmen = useMemo(() => {
-    return battingTeamPlayers.filter((p) =>
-      !dismissedIds.has(p.id) &&
-      p.id !== strikerId &&
-      p.id !== nonStrikerId
-    );
-  }, [battingTeamPlayers, dismissedIds, strikerId, nonStrikerId]);
-
-  const availableBowlers = useMemo(() => {
-    // If an over just completed, exclude the bowler who bowled it
-    if (stats.currentOver > 0 && stats.currentBall === 0 && balls.length > 0) {
-      const lastBowlerId = balls[balls.length - 1].bowlerId;
-      return bowlingTeamPlayers.filter((p) => p.id !== lastBowlerId);
-    }
-    return bowlingTeamPlayers;
-  }, [bowlingTeamPlayers, stats.currentOver, stats.currentBall, balls]);
-
-  const getPlayerName = useCallback(
-    (id: string | null) => {
-      if (!id) return 'Select';
-      return allPlayers.find((p) => p.id === id)?.name ?? id;
-    },
-    [allPlayers]
-  );
-
-  const currentOverBalls = useMemo(() => {
-    // If an over just completed (currentBall is 0) AND a new bowler hasn't
-    // been picked yet, we want to keep showing the balls from the over
-    // that just finished. The bowlerId remains the previous bowler until
-    // "Start Next Over" is clicked, and then it becomes null. Once a new
-    // bowler is picked, bowlerId will differ from the last ball's bowler.
-    const lastBallBowlerId = balls.length > 0 ? balls[balls.length - 1].bowlerId : null;
-    const isWaitingForNewBowler = 
-      stats.currentOver > 0 && 
-      stats.currentBall === 0 && 
-      (bowlerId === null || bowlerId === lastBallBowlerId);
-      
-    const ballsToFetch = isWaitingForNewBowler ? 6 : stats.currentBall;
-
-    let validSeen = 0;
-    let overStartIdx = balls.length;
-    for (let i = balls.length - 1; i >= 0; i--) {
-      const b = balls[i];
-      const isExtra = b?.extras?.type === 'wd' || b?.extras?.type === 'nb';
-      if (!isExtra) validSeen++;
-      if (validSeen > ballsToFetch) {
-        overStartIdx = i + 1;
-        break;
-      }
-      if (i === 0) overStartIdx = 0;
-    }
-    return balls.slice(overStartIdx);
-  }, [balls, stats, bowlerId]);
-
-  const completedOverBalls = useMemo(() => {
-    // Only compute this if we are exactly at the start of a new over
-    if (stats.currentOver === 0 || stats.currentBall > 0) return [];
-    
-    let validSeen = 0;
-    const overBalls: Ball[] = [];
-    for (let i = balls.length - 1; i >= 0; i--) {
-      const b = balls[i];
-      overBalls.unshift(b);
-      const isExtra = b?.extras?.type === 'wd' || b?.extras?.type === 'nb';
-      if (!isExtra) validSeen++;
-      if (validSeen === 6) {
-        break;
-      }
-    }
-    return overBalls;
-  }, [balls, stats]);
-
-  const batsmenStatsMap = useMemo(() => computeBatsmenStats(balls), [balls]);
-  const bowlerStatsMap = useMemo(() => computeBowlerStats(balls), [balls]);
-
-  // ---- Innings end banner strings (precomputed) ----
-  const inningsEndReason = useMemo(() => {
-    if (isMatchFinished && currentInningsIndex === 1 && firstInningsRuns !== null) {
-      const getTeamName = (teamId: string | undefined) => {
-        if (!teamId) return 'Team';
-        if (isLiveMode && match) {
-          return teamId === match.teamA ? (match.teamAName ?? match.teamA) : (match.teamBName ?? match.teamB);
-        }
-        if (resolvedConfig) {
-          return teamId === resolvedConfig.teamA ? resolvedConfig.teamAName : resolvedConfig.teamBName;
-        }
-        return 'Team';
-      };
-
-      const innings2TeamId = isLiveMode ? match?.innings[1]?.teamId : battingTeamId;
-      const innings1TeamId = isLiveMode ? match?.innings[0]?.teamId : bowlingTeamId;
-      
-      const innings2TeamName = getTeamName(innings2TeamId ?? undefined);
-      const innings1TeamName = getTeamName(innings1TeamId ?? undefined);
-
-      if (stats.totalRuns > firstInningsRuns) {
-        return `${innings2TeamName} wins by ${maxWickets - stats.totalWickets} wickets`;
-      } else if (stats.totalRuns === firstInningsRuns) {
-        return 'Match Tied';
-      } else {
-        return `${innings1TeamName} wins by ${firstInningsRuns - stats.totalRuns} runs`;
-      }
-    }
-    if (allOut) return `All out — ${stats.totalWickets} wickets`;
-    return `${maxOvers} overs completed`;
-  }, [
-    isMatchFinished, currentInningsIndex, firstInningsRuns, stats.totalRuns, stats.totalWickets, 
-    maxWickets, maxOvers, allOut, isLiveMode, match, resolvedConfig, battingTeamId, bowlingTeamId
-  ]);
-
-  const inningsEndScore = `${stats.totalRuns}/${stats.totalWickets} (${currentOverFormatted} ov)`;
-
-  // ---- Display values ----
-  const displayTeamName = isLiveMode
-    ? (battingTeamId === match?.teamA
-        ? (match?.teamAName ?? match?.teamA)
-        : (match?.teamBName ?? match?.teamB)) ?? 'Team'
-    : resolvedConfig
-      ? (battingTeamId === resolvedConfig.teamA
-          ? resolvedConfig.teamAName
-          : resolvedConfig.teamBName)
-      : 'Team';
-
-  const canUndo = localBalls.length > 0;
 
   const inputDisabled =
     !playersReady ||
@@ -469,16 +315,25 @@ export function useScoringState({
     }, 300);
   }, []);
 
-  // ---- Reset players when innings completes ----
+  // ---- Reset players when innings completes (but NOT when match finishes) ----
   useEffect(() => {
-    if (scoringDisabled && !prevInningsCompleteRef.current) {
+    if (scoringDisabled && !prevInningsCompleteRef.current && !isMatchFinished) {
       setStrikerId(null);
       setNonStrikerId(null);
       setBowlerId(null);
       setPickerMode(null);
     }
     prevInningsCompleteRef.current = scoringDisabled;
-  }, [scoringDisabled]);
+  }, [scoringDisabled, isMatchFinished]);
+
+  // ---- Auto-show OverCompleteModal when match finishes ----
+  const prevMatchFinishedRef = useRef(false);
+  useEffect(() => {
+    if (isMatchFinished && !prevMatchFinishedRef.current) {
+      setTimeout(() => setShowOverCompleteModal(true), 300);
+    }
+    prevMatchFinishedRef.current = isMatchFinished;
+  }, [isMatchFinished]);
 
   // ---- Initialize live balls once ----
   const hasInitializedLiveBallsRef = useRef(false);
@@ -534,7 +389,7 @@ export function useScoringState({
   // ---- Handlers ----
 
   const addBall = useCallback(
-    async (ball: Ball) => {
+    async (ball: EventSchema.BallEvent) => {
       setLocalBalls((prev) => [...prev, ball]);
       
       if (isLiveMode) {
@@ -560,14 +415,15 @@ export function useScoringState({
   const handleScore = useCallback(
     (runs: number) => {
       if (!strikerId || !bowlerId) return;
-      const newBall: Ball = {
+      
+      const newBall = createScoreEvent({
+        matchId: liveMatchId || localMatchIdRef.current,
+        inningsId: String(currentInningsIndex),
         bowlerId,
         strikerId,
-        runs,
-        extras: null,
-        wicket: null,
-        commentary: runs === 0 ? 'Dot ball' : runs === 4 ? 'FOUR!' : runs === 6 ? 'SIX!' : `${runs} ${runs === 1 ? 'run' : 'runs'}`,
-      };
+        nonStrikerId: nonStrikerId || 'unknown',
+      }, runs);
+      
       addBall(newBall);
       if (runs % 2 === 1) {
         const prev = strikerId;
@@ -575,40 +431,39 @@ export function useScoringState({
         setNonStrikerId(prev);
       }
     },
-    [addBall, strikerId, nonStrikerId, bowlerId]
+    [addBall, strikerId, nonStrikerId, bowlerId, liveMatchId, currentInningsIndex]
   );
 
   const handleExtra = useCallback(
     (type: ExtraType) => {
       if (!strikerId || !bowlerId) return;
-      const extraTypeMap: Record<ExtraType, 'wd' | 'nb' | 'b' | 'lb'> = {
-        WD: 'wd', NB: 'nb', B: 'b', LB: 'lb',
-      };
-      const newBall: Ball = {
+      
+      const newBall = createExtraEvent({
+        matchId: liveMatchId || localMatchIdRef.current,
+        inningsId: String(currentInningsIndex),
         bowlerId,
         strikerId,
-        runs: 0,
-        extras: { type: extraTypeMap[type], runs: 1 },
-        wicket: null,
-        commentary: `${type} - 1 run`,
-      };
+        nonStrikerId: nonStrikerId || 'unknown',
+      }, type as any);
+      
       addBall(newBall);
     },
-    [addBall, strikerId, bowlerId]
+    [addBall, strikerId, bowlerId, nonStrikerId, liveMatchId, currentInningsIndex]
   );
 
   const handleWicket = useCallback(() => {
     if (!strikerId || !bowlerId) return;
-    const newBall: Ball = {
+    
+    const newBall = createWicketEvent({
+      matchId: liveMatchId || localMatchIdRef.current,
+      inningsId: String(currentInningsIndex),
       bowlerId,
       strikerId,
-      runs: 0,
-      extras: null,
-      wicket: { type: 'caught', fielderId: 'fielder1' },
-      commentary: `WICKET! ${getPlayerName(strikerId)} caught out`,
-    };
+      nonStrikerId: nonStrikerId || 'unknown',
+    }, strikerId);
+    
     addBall(newBall);
-  }, [addBall, strikerId, bowlerId, getPlayerName]);
+  }, [addBall, strikerId, bowlerId, nonStrikerId, liveMatchId, currentInningsIndex]);
 
   const handlePenalty = useCallback(() => {
     if (!strikerId || !bowlerId) return;
@@ -620,30 +475,40 @@ export function useScoringState({
         {
           text: 'Add 5 Runs',
           onPress: () => {
-            const newBall: Ball = {
+            const newBall = createPenaltyEvent({
+              matchId: liveMatchId || localMatchIdRef.current,
+              inningsId: String(currentInningsIndex),
               bowlerId,
               strikerId,
-              runs: 5,
-              extras: null,
-              wicket: null,
-              commentary: 'PENALTY — 5 runs awarded',
-            };
+              nonStrikerId: nonStrikerId || 'unknown',
+            }, 5);
             addBall(newBall);
           },
         },
       ]
     );
-  }, [addBall, strikerId, bowlerId]);
+  }, [addBall, strikerId, bowlerId, nonStrikerId, liveMatchId, currentInningsIndex]);
 
   const handleUndo = useCallback(async () => {
     if (localBalls.length === 0) return;
     
     const ballToUndo = localBalls[localBalls.length - 1];
     setLocalBalls((prev) => prev.slice(0, -1));
+
+    // Restore the striker and non-striker to who they were at the start of the undone ball
+    setStrikerId(ballToUndo.strikerId);
+    setNonStrikerId(ballToUndo.nonStrikerId);
     
     if (isLiveMode) {
       try {
         await undoLastBallFromMatch();
+        if (liveMatchId) {
+          const db = getFirebaseDb();
+          updateDoc(doc(db, 'matches', liveMatchId), {
+            currentStrikerId: ballToUndo.strikerId,
+            currentNonStrikerId: ballToUndo.nonStrikerId,
+          }).catch(() => {});
+        }
       } catch (err) {
         console.error('Failed to undo ball from Firebase:', err);
         setLocalBalls((prev) => [...prev, ballToUndo]); // revert
