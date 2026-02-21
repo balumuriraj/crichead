@@ -1,5 +1,5 @@
 import { initializeApp, getApps, FirebaseApp, FirebaseOptions } from 'firebase/app';
-import { getAuth, Auth } from 'firebase/auth';
+import { getAuth, Auth, initializeAuth, type Persistence } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 
@@ -31,20 +31,25 @@ let storage: FirebaseStorage;
  * It's safe to call multiple times - subsequent calls will return the existing instance.
  *
  * @param config - Optional Firebase configuration object. If not provided, uses defaultFirebaseConfig
+ * @param persistence - Optional auth persistence strategy (e.g. for React Native)
  * @returns Object containing initialized Firebase services
  *
  * @example
  * ```typescript
  * import { initializeFirebase } from '@crichead/core';
+ * import { getReactNativePersistence } from 'firebase/auth';
+ * import AsyncStorage from '@react-native-async-storage/async-storage';
  *
- * const { app, auth, db, storage } = initializeFirebase({
- *   apiKey: "your-api-key",
- *   projectId: "your-project-id",
- *   // ... other config
- * });
+ * const { app, auth, db, storage } = initializeFirebase(
+ *   { apiKey: "your-api-key", projectId: "your-project-id" },
+ *   getReactNativePersistence(AsyncStorage)
+ * );
  * ```
  */
-export function initializeFirebase(config: FirebaseOptions = defaultFirebaseConfig) {
+export function initializeFirebase(
+  config: FirebaseOptions = defaultFirebaseConfig,
+  persistence?: Persistence
+) {
   // Check if Firebase is already initialized
   if (!firebaseApp) {
     const existingApps = getApps();
@@ -58,7 +63,24 @@ export function initializeFirebase(config: FirebaseOptions = defaultFirebaseConf
     }
 
     // Initialize services
-    auth = getAuth(firebaseApp);
+    // Check if auth is already initialized on this app to prevent errors
+    // but the SDK handles this for getAuth. Since we need to provide persistence,
+    // we use initializeAuth if not already initialized.
+    try {
+      if (persistence) {
+        auth = initializeAuth(firebaseApp, { persistence });
+      } else {
+        auth = getAuth(firebaseApp);
+      }
+    } catch (e: any) {
+      // If auth is already initialized (e.g., during hot reload), fallback to getAuth
+      if (e.code === 'auth/already-initialized') {
+        auth = getAuth(firebaseApp);
+      } else {
+        throw e;
+      }
+    }
+
     db = getFirestore(firebaseApp);
     storage = getStorage(firebaseApp);
   }

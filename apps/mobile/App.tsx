@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { initializeFirebase, type MatchConfig, type Toss } from '@crichead/core';
+// @ts-expect-error firebase/auth export getReactNativePersistence is missing in some typedefs but exists at runtime
+import { getReactNativePersistence } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import MatchDetailsScreen from './src/screens/MatchDetailsScreen';
 import SelectTeamsScreen, { type TeamInfo } from './src/screens/SelectTeamsScreen';
 import TossScreen from './src/screens/TossScreen';
@@ -9,13 +12,15 @@ import ScoringScreen from './src/screens/ScoringScreen';
 
 // Initialize Firebase before any hooks run
 initializeFirebase({
-  apiKey: 'AIzaSyC4EKVna2ChIW0L-RXnFHt0LBkUX7NvIAI',
-  authDomain: 'crichead-app.firebaseapp.com',
-  projectId: 'crichead-app',
-  storageBucket: 'crichead-app.firebasestorage.app',
-  messagingSenderId: '345345271554',
-  appId: '1:345345271554:web:f2dc213b6cbf909639441b',
-});
+    apiKey: 'AIzaSyC4EKVna2ChIW0L-RXnFHt0LBkUX7NvIAI',
+    authDomain: 'crichead-app.firebaseapp.com',
+    projectId: 'crichead-app',
+    storageBucket: 'crichead-app.firebasestorage.app',
+    messagingSenderId: '345345271554',
+    appId: '1:345345271554:web:f2dc213b6cbf909639441b',
+  },
+  getReactNativePersistence(AsyncStorage)
+);
 
 type AppScreen =
   | { name: 'matchDetails' }

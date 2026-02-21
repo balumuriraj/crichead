@@ -10,6 +10,8 @@ export interface LocalMatchRecord {
   nonStrikerId: string | null;
   bowlerId: string | null;
   status: 'upcoming' | 'live' | 'finished' | 'abandoned';
+  currentInningsIndex?: number;
+  firstInningsRuns?: number | null;
   createdAt: number;
   updatedAt: number;
 }

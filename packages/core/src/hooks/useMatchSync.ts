@@ -7,6 +7,8 @@ import {
   query,
   orderBy,
   serverTimestamp,
+  getDocs,
+  limit,
 } from 'firebase/firestore';
 import { getFirebaseDb } from '../firebase/client';
 import type { Ball } from '../types';
@@ -31,7 +33,11 @@ export interface UseMatchSyncReturn {
   addBallToMatch: (ball: Ball) => Promise<void>;
   
   /** Manually trigger the end of the current innings (transitions to 2nd innings or finishes match) */
+  /** Manually trigger the end of the current innings (transitions to 2nd innings or finishes match) */
   endCurrentInnings: () => Promise<void>;
+  
+  /** Undo the most recently added ball in the current innings */
+  undoLastBallFromMatch: () => Promise<void>;
 }
 
 export function useMatchSync(
@@ -314,6 +320,111 @@ export function useMatchSync(
     }
   }, [matchId]);
 
+  const undoLastBallFromMatch = useCallback(async (): Promise<void> => {
+    if (!matchId) {
+      throw new Error('No matchId provided');
+    }
+
+    const db = getFirebaseDb();
+    const matchDocRef = doc(db, 'matches', matchId);
+
+    try {
+      // First, get the current match data to find the current innings
+      const matchSnap = await getDocs(query(collection(db, 'matches'), limit(1))); // We just need innings index, but we can do it safer
+      // Wait, we can just get the match doc directly but we're in a hook where we already have `match`.
+      // However, to avoid race conditions, let's just use the transaction to get the match, but we need the last ball ID first.
+      
+      // Let's get the match snapshot to know the inningsIndex
+      let inningsIndex = match?.currentInningsIndex;
+      if (inningsIndex === undefined) {
+         // Query match manually if the hook state is stale
+         return; // We rely on the hook's `match` state to be populated
+      }
+      
+      const ballsRef = collection(db, 'matches', matchId, 'innings', String(inningsIndex), 'balls');
+      const latestBallQuery = query(ballsRef, orderBy('sequence', 'desc'), limit(1));
+      const latestBallSnap = await getDocs(latestBallQuery);
+      
+      if (latestBallSnap.empty || latestBallSnap.docs.length === 0) {
+        return; // No balls to undo
+      }
+      
+      const lastBallDoc = latestBallSnap.docs[0];
+      if (!lastBallDoc) return;
+      const lastBallData = lastBallDoc.data();
+      const ballId = lastBallDoc.id;
+
+      await runTransaction(db, async (transaction) => {
+        const txMatchSnap = await transaction.get(matchDocRef);
+        if (!txMatchSnap.exists()) {
+          throw new Error(`Match ${matchId} not found`);
+        }
+
+        const matchData = txMatchSnap.data() as Omit<FirestoreMatchDoc, 'id'>;
+        if (matchData.status !== 'live' && matchData.status !== 'finished') {
+          throw new Error(`Cannot undo ball: match status is '${matchData.status}'`);
+        }
+        if (matchData.status === 'finished' && inningsIndex !== 1) {
+           throw new Error(`Cannot undo ball: match status is finished`);
+        }
+
+        const currentInnings = matchData.innings[inningsIndex];
+        if (!currentInnings || currentInnings.ballCount === 0) {
+          return; // nothing to undo
+        }
+
+        // Verify sequence to prevent race conditions
+        if (lastBallData.sequence !== currentInnings.ballCount - 1) {
+          throw new Error('Ball count mismatch: another device may have scored.');
+        }
+
+        const newTotalRuns = Math.max(0, currentInnings.totalRuns - lastBallData.runs - (lastBallData.extras?.runs ?? 0));
+        const newTotalWickets = Math.max(0, currentInnings.totalWickets - (lastBallData.wicket ? 1 : 0));
+        const newBallCount = Math.max(0, currentInnings.ballCount - 1);
+
+        let newOvers = currentInnings.overs;
+        const isValidDelivery = !lastBallData.extras || (lastBallData.extras.type !== 'wd' && lastBallData.extras.type !== 'nb');
+        if (isValidDelivery) {
+          const { currentOver, currentBall } = parseOvers(currentInnings.overs);
+          const totalValidBalls = Math.max(0, currentOver * 6 + currentBall - 1);
+          const prevOver = Math.floor(totalValidBalls / 6);
+          const prevBall = totalValidBalls % 6;
+          newOvers = parseFloat(`${prevOver}.${prevBall}`);
+        }
+
+        // Delete the ball
+        transaction.delete(doc(ballsRef, ballId));
+
+        // Update match innings
+        const updatedInnings = [...matchData.innings];
+        updatedInnings[inningsIndex] = {
+          ...currentInnings,
+          totalRuns: newTotalRuns,
+          totalWickets: newTotalWickets,
+          overs: newOvers,
+          ballCount: newBallCount,
+        };
+
+        const updatePayload: Record<string, unknown> = {
+          innings: updatedInnings,
+        };
+        
+        // If match was finished by this last ball, we must revert it to live
+        if (matchData.status === 'finished') {
+          updatePayload.status = 'live';
+        }
+
+        transaction.update(matchDocRef, updatePayload);
+      });
+    } catch (err) {
+      const txError = err instanceof Error ? err : new Error(String(err));
+      if (mountedRef.current) {
+        setError(txError);
+      }
+      throw txError;
+    }
+  }, [matchId, match]);
+
   return {
     match,
     currentInningsBalls,
@@ -321,5 +432,6 @@ export function useMatchSync(
     error,
     addBallToMatch,
     endCurrentInnings,
+    undoLastBallFromMatch,
   };
 }

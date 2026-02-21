@@ -42,7 +42,7 @@ function makePlayers(prefix: string, count: number): TempPlayer[] {
   }));
 }
 
-const OVERS_PRESETS = [5, 10, 15, 20];
+const OVERS_PRESETS = [5, 10, 15, 20, 30, 40, 50];
 
 /* ── Component ── */
 
@@ -70,7 +70,7 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
 
   function handlePlayersChange(delta: number) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setPlayersPerSide((prev) => Math.max(2, Math.min(11, prev + delta)));
+    setPlayersPerSide((prev) => Math.max(2, Math.min(15, prev + delta)));
   }
 
   function handleWicketsChange(delta: number) {
@@ -156,11 +156,6 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Title */}
-        <Text style={styles.title}>{'\u26A1'} Quick Match</Text>
-        <Text style={styles.subtitle}>
-          Instant game with temporary teams. Just pick the toss and go!
-        </Text>
 
         {/* Teams Preview */}
         <View style={styles.teamsCard}>
@@ -210,28 +205,30 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
           </View>
 
           {/* Quick overs presets */}
-          <View style={styles.presetsRow}>
-            {OVERS_PRESETS.map((v) => (
-              <TouchableOpacity
-                key={v}
-                style={[styles.presetChip, overs === v && styles.presetChipActive]}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setOvers(v);
-                }}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.presetChipText,
-                    overs === v && styles.presetChipTextActive,
-                  ]}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.presetsRow}>
+              {OVERS_PRESETS.map((v) => (
+                <TouchableOpacity
+                  key={v}
+                  style={[styles.presetChip, overs === v && styles.presetChipActive]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setOvers(v);
+                  }}
+                  activeOpacity={0.7}
                 >
-                  {v}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+                  <Text
+                    style={[
+                      styles.presetChipText,
+                      overs === v && styles.presetChipTextActive,
+                    ]}
+                  >
+                    {v}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
 
           {/* Players per side */}
           <View style={styles.settingRow}>
