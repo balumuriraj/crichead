@@ -12,34 +12,13 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
-import { getFirebaseDb, type TossDecision, type PlayerRole, createMatch } from '@crichead/core';
+import { getFirebaseDb, type TossDecision, createMatch, makePlayers } from '@crichead/core';
 import type { QuickMatchConfig } from '../types/QuickMatchConfig';
 
 /* ── Temporary data ── */
 
-interface TempPlayer {
-  id: string;
-  name: string;
-  role: PlayerRole;
-}
-
 const HOME_TEAM = { id: '_home', name: 'Home', initial: 'H' };
 const AWAY_TEAM = { id: '_away', name: 'Away', initial: 'A' };
-
-function makePlayers(prefix: string, count: number): TempPlayer[] {
-  const roles: PlayerRole[] = [];
-  // Distribute roles: ~40% bat, ~20% all, ~40% bowl
-  for (let i = 0; i < count; i++) {
-    if (i < Math.ceil(count * 0.4)) roles.push('bat');
-    else if (i < Math.ceil(count * 0.6)) roles.push('all');
-    else roles.push('bowl');
-  }
-  return roles.map((role, i) => ({
-    id: `${prefix}_${i + 1}`,
-    name: `${prefix} Player ${i + 1}`,
-    role,
-  }));
-}
 
 const OVERS_PRESETS = [5, 10, 15, 20, 30, 40, 50];
 

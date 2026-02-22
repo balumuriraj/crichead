@@ -1,93 +1,34 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  getFirestore,
-  doc,
-  collection,
-  onSnapshot,
-  query,
-  where,
-} from 'firebase/firestore';
-import type { PointsSystem } from '@crichead/core';
+  useTournamentQuery,
+  useTournamentMatchesQuery,
+  useTeamsQuery,
+} from '@crichead/core';
 import PointsTable from './PointsTable';
 import Schedule, { type MatchDoc } from './Schedule';
 import CreateTournamentModal from './CreateTournamentModal';
-
-interface TournamentDoc {
-  name: string;
-  type: 'league' | 'knockout';
-  status: 'upcoming' | 'ongoing' | 'completed';
-  teamIds: string[];
-  pointsSystem: PointsSystem;
-}
 
 export default function LeagueDashboardPage() {
   const params = useParams();
   const tournamentId = typeof params.id === 'string' ? params.id : '';
 
-  const [tournament, setTournament] = useState<TournamentDoc | null>(null);
-  const [matches, setMatches] = useState<MatchDoc[]>([]);
-  const [teamNames, setTeamNames] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
+  const { tournament, loading, notFound } = useTournamentQuery(tournamentId);
+  const { matches: rawMatches } = useTournamentMatchesQuery(tournamentId);
+  const { teams } = useTeamsQuery();
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  // Subscribe to tournament doc
-  useEffect(() => {
-    if (!tournamentId) return;
-    const db = getFirestore();
-    const unsub = onSnapshot(doc(db, 'tournaments', tournamentId), (snap) => {
-      if (!snap.exists()) {
-        setNotFound(true);
-        setLoading(false);
-        return;
-      }
-      setTournament(snap.data() as TournamentDoc);
-      setLoading(false);
-    });
-    return unsub;
-  }, [tournamentId]);
-
-  // Subscribe to tournament matches
-  useEffect(() => {
-    if (!tournamentId) return;
-    const db = getFirestore();
-    const q = query(
-      collection(db, 'matches'),
-      where('tournamentId', '==', tournamentId)
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      setMatches(
-        snap.docs.map((d) => {
-          const data = d.data();
-          return {
-            id: d.id,
-            teamA: data.teamA as string,
-            teamB: data.teamB as string,
-            status: data.status as MatchDoc['status'],
-            innings: (data.innings ?? []) as MatchDoc['innings'],
-          };
-        })
-      );
-    });
-    return unsub;
-  }, [tournamentId]);
-
-  // Subscribe to all teams (for name resolution)
-  useEffect(() => {
-    const db = getFirestore();
-    const unsub = onSnapshot(collection(db, 'teams'), (snap) => {
-      const names: Record<string, string> = {};
-      snap.docs.forEach((d) => {
-        names[d.id] = d.data().name as string;
-      });
-      setTeamNames(names);
-    });
-    return unsub;
-  }, []);
+  const teamNames = Object.fromEntries(teams.map((t) => [t.id, t.name]));
+  const matches: MatchDoc[] = rawMatches.map((m) => ({
+    id: m.id,
+    teamA: m.teamA,
+    teamB: m.teamB,
+    status: m.status as MatchDoc['status'],
+    innings: m.innings,
+  }));
 
   // Loading
   if (loading) {
@@ -127,8 +68,6 @@ export default function LeagueDashboardPage() {
             leagueId={tournamentId}
             onCreated={() => {
               setShowCreateModal(false);
-              setNotFound(false);
-              setLoading(true);
             }}
             onClose={() => setShowCreateModal(false)}
           />

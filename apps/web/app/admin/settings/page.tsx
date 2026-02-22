@@ -1,12 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import {
-  getFirestore,
-  doc,
-  getDoc,
-  setDoc,
-} from 'firebase/firestore';
+import { getThemeSettings, saveThemeSettings } from '@crichead/core';
 import ThemePreview from './ThemePreview';
 
 const DEFAULTS = {
@@ -23,15 +18,13 @@ export default function AdminSettingsPage() {
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Load saved theme from Firestore
+  // Load saved theme
   useEffect(() => {
-    const db = getFirestore();
-    getDoc(doc(db, 'settings', 'theme')).then((snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        if (data.primaryColor) setPrimaryColor(data.primaryColor);
-        if (data.secondaryColor) setSecondaryColor(data.secondaryColor);
-        if (data.logoUrl) setLogoUrl(data.logoUrl);
+    getThemeSettings().then((settings) => {
+      if (settings) {
+        if (settings.primaryColor) setPrimaryColor(settings.primaryColor);
+        if (settings.secondaryColor) setSecondaryColor(settings.secondaryColor);
+        if (settings.logoUrl) setLogoUrl(settings.logoUrl);
       }
       setLoading(false);
     }).catch(() => setLoading(false));
@@ -41,12 +34,7 @@ export default function AdminSettingsPage() {
     setSaving(true);
     setSaved(false);
     try {
-      const db = getFirestore();
-      await setDoc(doc(db, 'settings', 'theme'), {
-        primaryColor,
-        secondaryColor,
-        logoUrl,
-      });
+      await saveThemeSettings({ primaryColor, secondaryColor, logoUrl });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } finally {

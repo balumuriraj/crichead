@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   type TossDecision,
-  type PlayerRole,
   createMatch,
+  makePlayers,
 } from '@crichead/core';
 
 // ---------------------------------------------------------------------------
@@ -14,20 +14,6 @@ import {
 
 const HOME_TEAM = { id: '_home', name: 'Home', initial: 'H' };
 const AWAY_TEAM = { id: '_away', name: 'Away', initial: 'A' };
-
-function makePlayers(prefix: string, count: number) {
-  const roles: PlayerRole[] = [];
-  for (let i = 0; i < count; i++) {
-    if (i < Math.ceil(count * 0.4)) roles.push('bat');
-    else if (i < Math.ceil(count * 0.6)) roles.push('all');
-    else roles.push('bowl');
-  }
-  return roles.map((role, i) => ({
-    id: `${prefix}_${i + 1}`,
-    name: `${prefix} Player ${i + 1}`,
-    role,
-  }));
-}
 
 // ---------------------------------------------------------------------------
 // Component

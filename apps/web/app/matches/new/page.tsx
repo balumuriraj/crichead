@@ -1,39 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   type MatchFormat,
-  type MatchConfig,
   type TossDecision,
   type Toss,
   type PlayerRole,
+  useTeamsQuery,
+  usePlayersQuery,
+  createMatch,
 } from '@crichead/core';
-import {
-  getFirestore,
-  collection,
-  addDoc,
-  onSnapshot,
-  orderBy,
-  query,
-} from 'firebase/firestore';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-interface TeamInfo {
-  id: string;
-  name: string;
-  logoUrl: string;
-  homeGround: string;
-}
-
-interface PlayerDoc {
-  id: string;
-  name: string;
-  role: PlayerRole;
-}
 
 type Step = 'details' | 'teams' | 'toss' | 'roster';
 
@@ -74,8 +55,7 @@ export default function NewMatchPage() {
   const [venue, setVenue] = useState('');
 
   // Step 2: Teams
-  const [teams, setTeams] = useState<TeamInfo[]>([]);
-  const [teamsLoading, setTeamsLoading] = useState(true);
+  const { teams, loading: teamsLoading } = useTeamsQuery();
   const [selectedA, setSelectedA] = useState<string | null>(null);
   const [selectedB, setSelectedB] = useState<string | null>(null);
 
@@ -84,41 +64,11 @@ export default function NewMatchPage() {
   const [tossDecision, setTossDecision] = useState<TossDecision | null>(null);
 
   // Step 4: Roster
-  const [playersA, setPlayersA] = useState<PlayerDoc[]>([]);
-  const [playersB, setPlayersB] = useState<PlayerDoc[]>([]);
+  const { players: playersA } = usePlayersQuery(selectedA ?? '');
+  const { players: playersB } = usePlayersQuery(selectedB ?? '');
   const [rosterA, setRosterA] = useState<Set<string>>(new Set());
   const [rosterB, setRosterB] = useState<Set<string>>(new Set());
   const [rosterTab, setRosterTab] = useState<'A' | 'B'>('A');
-
-  // Load teams
-  useEffect(() => {
-    const db = getFirestore();
-    const q = query(collection(db, 'teams'), orderBy('name'));
-    const unsub = onSnapshot(q, (snap) => {
-      const list: TeamInfo[] = snap.docs.map((d) => ({
-        id: d.id,
-        name: d.data().name ?? '',
-        logoUrl: d.data().logoUrl ?? '',
-        homeGround: d.data().homeGround ?? '',
-      }));
-      setTeams(list);
-      setTeamsLoading(false);
-    });
-    return unsub;
-  }, []);
-
-  // Load players when teams are selected and we're on roster step
-  useEffect(() => {
-    if (step !== 'roster' || !selectedA || !selectedB) return;
-    const db = getFirestore();
-    const unsubA = onSnapshot(collection(db, `teams/${selectedA}/players`), (snap) => {
-      setPlayersA(snap.docs.map((d) => ({ id: d.id, name: d.data().name, role: d.data().role })));
-    });
-    const unsubB = onSnapshot(collection(db, `teams/${selectedB}/players`), (snap) => {
-      setPlayersB(snap.docs.map((d) => ({ id: d.id, name: d.data().name, role: d.data().role })));
-    });
-    return () => { unsubA(); unsubB(); };
-  }, [step, selectedA, selectedB]);
 
   const teamA = teams.find((t) => t.id === selectedA) ?? null;
   const teamB = teams.find((t) => t.id === selectedB) ?? null;
@@ -149,7 +99,6 @@ export default function NewMatchPage() {
     try {
       const toss: Toss = { winner: tossWinner, decision: tossDecision };
       const battingFirst = tossDecision === 'bat' ? tossWinner : (tossWinner === teamA.id ? teamB.id : teamA.id);
-      const db = getFirestore();
 
       const matchDoc = {
         teamA: teamA.id,
@@ -172,8 +121,8 @@ export default function NewMatchPage() {
         playersPerSide: Math.max(rosterA.size, rosterB.size),
       };
 
-      const ref = await addDoc(collection(db, 'matches'), matchDoc);
-      router.push(`/matches/${ref.id}/score`);
+      const matchId = await createMatch(matchDoc);
+      router.push(`/matches/${matchId}/score`);
     } catch (err) {
       console.error('Failed to create match:', err);
       setCreating(false);

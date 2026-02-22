@@ -1,20 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import {
-  getFirestore,
-  collection,
-  addDoc,
-  onSnapshot,
-  query,
-  orderBy,
-  serverTimestamp,
-} from 'firebase/firestore';
-
-interface TeamOption {
-  id: string;
-  name: string;
-}
+import { useState } from 'react';
+import { useTeamsQuery, createTournament } from '@crichead/core';
 
 interface Props {
   leagueId: string;
@@ -29,19 +16,10 @@ export default function CreateTournamentModal({ leagueId, onCreated, onClose }: 
   const [lossPts, setLossPts] = useState(0);
   const [tiePts, setTiePts] = useState(1);
   const [drawPts, setDrawPts] = useState(0);
-  const [teams, setTeams] = useState<TeamOption[]>([]);
+  const { teams } = useTeamsQuery();
   const [selectedTeams, setSelectedTeams] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const db = getFirestore();
-    const q = query(collection(db, 'teams'), orderBy('name'));
-    const unsub = onSnapshot(q, (snap) => {
-      setTeams(snap.docs.map((d) => ({ id: d.id, name: d.data().name as string })));
-    });
-    return unsub;
-  }, []);
 
   function toggleTeam(teamId: string) {
     setSelectedTeams((prev) => {
@@ -61,17 +39,14 @@ export default function CreateTournamentModal({ leagueId, onCreated, onClose }: 
     setError(null);
 
     try {
-      const db = getFirestore();
-      const ref = await addDoc(collection(db, 'tournaments'), {
+      const tournamentId = await createTournament({
         name: name.trim(),
         leagueId,
         type,
-        status: 'upcoming',
         teamIds: Array.from(selectedTeams),
         pointsSystem: { win: winPts, loss: lossPts, tie: tiePts, draw: drawPts },
-        createdAt: serverTimestamp(),
       });
-      onCreated(ref.id);
+      onCreated(tournamentId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create tournament');
       setSaving(false);
