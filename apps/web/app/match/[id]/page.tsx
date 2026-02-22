@@ -9,7 +9,7 @@ import {
   formatOvers,
   formatBallDisplay,
   splitBallsIntoOvers,
-  type Ball,
+  EventSchema,
   type FirestoreInningsSummary,
 } from '@crichead/core';
 
@@ -17,12 +17,12 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getBallColor(ball: Ball): string {
+function getBallColor(ball: EventSchema.BallEvent): string {
   if (ball.wicket) return 'bg-red-500 text-white';
-  if (ball.runs === 4 && !ball.extras) return 'bg-[#00FF41] text-[#0F172A]';
-  if (ball.runs === 6 && !ball.extras) return 'bg-yellow-400 text-[#0F172A]';
-  if (ball.extras) return 'bg-amber-600 text-white';
-  if (ball.runs === 0) return 'bg-[#334155] text-gray-400';
+  if (ball.runs.bat === 4 && ball.runs.extra === 0) return 'bg-[#00FF41] text-[#0F172A]';
+  if (ball.runs.bat === 6 && ball.runs.extra === 0) return 'bg-yellow-400 text-[#0F172A]';
+  if (ball.runs.extra > 0) return 'bg-amber-600 text-white';
+  if (ball.runs.bat === 0 && ball.runs.extra === 0 && ball.runs.penalty === 0) return 'bg-[#334155] text-gray-400';
   return 'bg-[#334155] text-white';
 }
 
@@ -57,10 +57,10 @@ export default function MatchPage() {
 
   const overs = useMemo(() => splitBallsIntoOvers(balls), [balls]);
 
-  const fours = balls.filter(b => b.runs === 4 && !b.extras).length;
-  const sixes = balls.filter(b => b.runs === 6 && !b.extras).length;
-  const dots = balls.filter(b => b.runs === 0 && !b.extras && !b.wicket).length;
-  const extras = balls.filter(b => b.extras).reduce((sum, b) => sum + (b.extras?.runs ?? 0), 0);
+  const fours = balls.filter(b => b.runs.bat === 4 && b.runs.extra === 0).length;
+  const sixes = balls.filter(b => b.runs.bat === 6 && b.runs.extra === 0).length;
+  const dots = balls.filter(b => b.runs.bat === 0 && b.runs.extra === 0 && !b.wicket).length;
+  const extras = balls.filter(b => b.runs.extra > 0).reduce((sum, b) => sum + b.runs.extra, 0);
 
   // ---- Loading ----
   if (loading) {
@@ -204,7 +204,7 @@ export default function MatchPage() {
             <div className="space-y-3">
               {overs.map((over, overIdx) => {
                 const overRuns = over.reduce(
-                  (sum, b) => sum + b.runs + (b.extras?.runs ?? 0),
+                  (sum, b) => sum + b.runs.bat + b.runs.extra + b.runs.penalty,
                   0
                 );
                 return (
@@ -217,7 +217,7 @@ export default function MatchPage() {
                         <div
                           key={ballIdx}
                           className={`w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold transition-transform hover:scale-110 cursor-default ${getBallColor(ball)}`}
-                          title={ball.commentary ?? ''}
+                          title={ball.metadata?.commentary as string ?? ''}
                         >
                           {formatBallDisplay(ball)}
                         </div>
@@ -253,7 +253,7 @@ export default function MatchPage() {
                     >
                       {formatBallDisplay(ball)}
                     </div>
-                    <p className="text-sm text-gray-300">{ball.commentary}</p>
+                    <p className="text-sm text-gray-300">{ball.metadata?.commentary as string}</p>
                   </div>
                 ))}
             </div>

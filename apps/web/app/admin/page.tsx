@@ -26,6 +26,7 @@ export default function AdminDashboardPage() {
   return (
     <div className="max-w-5xl mx-auto p-6">
       <div className="flex items-center gap-3 mb-8">
+        {/* @ts-expect-error React 18/19 mismatch */}
         <LayoutDashboard size={22} className="text-electric-green" />
         <h1 className="text-xl font-bold text-white">Dashboard Home</h1>
       </div>
@@ -37,6 +38,7 @@ export default function AdminDashboardPage() {
             href={link.href}
             className="group bg-navy-800 border border-navy-700 rounded-2xl p-5 hover:border-electric-green/30 transition-colors"
           >
+            {/* @ts-expect-error React 18/19 mismatch */}
             <link.Icon size={24} className="text-electric-green mb-3" />
             <h3 className="text-sm font-bold text-white mb-1 group-hover:text-electric-green transition-colors">
               {link.label}

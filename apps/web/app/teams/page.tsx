@@ -2,28 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getFirestore, collection, onSnapshot, query, orderBy } from 'firebase/firestore';
-
-interface TeamDoc {
-  id: string;
-  name: string;
-  logoUrl: string;
-  homeGround: string;
-}
+import { useTeamsQuery, type TeamInfo } from '@crichead/core';
 
 export default function TeamsPage() {
-  const [teams, setTeams] = useState<TeamDoc[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const db = getFirestore();
-    const q = query(collection(db, 'teams'), orderBy('name'));
-    const unsub = onSnapshot(q, (snap) => {
-      setTeams(snap.docs.map((d) => ({ id: d.id, ...d.data() } as TeamDoc)));
-      setLoading(false);
-    });
-    return unsub;
-  }, []);
+  const { teams, loading } = useTeamsQuery();
 
   if (loading) {
     return (

@@ -4,15 +4,15 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import {
   useMatchSync,
-  calculateInningsStats,
-  formatOvers,
-  calculateRunRate,
+  useScoringEngine,
   formatBallDisplay,
   splitBallsIntoOvers,
-  computeBatsmenStats,
-  computeBowlerStats,
-  type Ball,
+  EventSchema,
   type PlayingXIEntry,
+  createScoreEvent,
+  createExtraEvent,
+  createWicketEvent,
+  createPenaltyEvent,
 } from '@crichead/core';
 
 // ---------------------------------------------------------------------------
@@ -26,12 +26,12 @@ type ExtraType = 'wd' | 'nb' | 'b' | 'lb';
 // Ball color helper (Tailwind classes — web only)
 // ---------------------------------------------------------------------------
 
-function getBallColor(ball: Ball): string {
+function getBallColor(ball: EventSchema.BallEvent): string {
   if (ball.wicket) return 'bg-red-500 text-white';
-  if (ball.runs === 4 && !ball.extras) return 'bg-[#00FF41] text-[#0F172A]';
-  if (ball.runs === 6 && !ball.extras) return 'bg-yellow-400 text-[#0F172A]';
-  if (ball.extras) return 'bg-amber-600 text-white';
-  if (ball.runs === 0) return 'bg-[#334155] text-gray-400';
+  if (ball.runs.bat === 4 && ball.runs.extra === 0) return 'bg-[#00FF41] text-[#0F172A]';
+  if (ball.runs.bat === 6 && ball.runs.extra === 0) return 'bg-yellow-400 text-[#0F172A]';
+  if (ball.runs.extra > 0) return 'bg-amber-600 text-white';
+  if (ball.runs.bat === 0 && ball.runs.extra === 0 && ball.runs.penalty === 0) return 'bg-[#334155] text-gray-400';
   return 'bg-[#334155] text-white';
 }
 
@@ -52,7 +52,7 @@ export default function ScorePage() {
   } = useMatchSync(matchId, { subscribeToBalls: true });
 
   // ---- Optimistic updates ----
-  const [optimisticBalls, setOptimisticBalls] = useState<Ball[]>([]);
+  const [optimisticBalls, setOptimisticBalls] = useState<EventSchema.BallEvent[]>([]);
 
   // ---- Player state ----
   const [strikerId, setStrikerId] = useState<string | null>(null);
@@ -69,80 +69,39 @@ export default function ScorePage() {
     return [...firestoreBalls, ...pendingOptimistic];
   }, [firestoreBalls, optimisticBalls]);
 
-  const stats = useMemo(() => calculateInningsStats(balls), [balls]);
-  const currentOverFormatted = formatOvers(stats.currentOver, stats.currentBall);
-  const runRate = calculateRunRate(stats.totalRuns, stats.currentOver, stats.currentBall);
+  const engineState = useScoringEngine({
+    balls,
+    config: match,
+    match,
+    isLiveMode: true,
+    localCurrentInningsIndex: 0,
+    localFirstInningsRuns: null,
+    strikerId,
+    nonStrikerId,
+    bowlerId,
+  });
 
-  const maxOvers = match?.oversPerInnings ?? 0;
-  const maxWickets = (match?.playersPerSide ?? 11) - 1;
-  const allOversCompleted = maxOvers > 0 && stats.currentOver >= maxOvers && stats.currentBall === 0;
-  const allOut = stats.totalWickets >= maxWickets;
-  const isInningsComplete = allOversCompleted || allOut || match?.status === 'finished';
-  const playersReady = strikerId !== null && nonStrikerId !== null && bowlerId !== null;
+  const {
+    stats,
+    currentOverFormatted,
+    runRate,
+    maxOvers,
+    maxWickets,
+    isInningsComplete,
+    playersReady,
+    allOut,
+    allOversCompleted,
+    isMatchFinished,
+    allPlayers,
+    availableBatsmen,
+    availableBowlers,
+    getPlayerName,
+    currentOverBalls,
+  } = engineState;
+
+  const batsmenStatsMap = stats.batterStats;
+  const bowlerStatsMap = stats.bowlerStats;
   const inputDisabled = isInningsComplete || !playersReady || pickerMode !== null;
-
-  // ---- Available players ----
-  const allPlayers = useMemo((): PlayingXIEntry[] => {
-    if (!match?.playingXI) return [];
-    const players: PlayingXIEntry[] = [];
-    for (const teamId of Object.keys(match.playingXI)) {
-      for (const p of match.playingXI[teamId] ?? []) {
-        if (!players.find((x) => x.id === p.id)) {
-          players.push(p);
-        }
-      }
-    }
-    return players;
-  }, [match]);
-
-  const dismissedIds = useMemo(() => {
-    const dismissed = new Set<string>();
-    for (const b of balls) {
-      if (b.wicket) dismissed.add(b.strikerId);
-    }
-    return dismissed;
-  }, [balls]);
-
-  const availableBatsmen = useMemo(
-    () => allPlayers.filter((p) =>
-      (p.role === 'bat' || p.role === 'all') &&
-      !dismissedIds.has(p.id) && p.id !== strikerId && p.id !== nonStrikerId
-    ),
-    [allPlayers, dismissedIds, strikerId, nonStrikerId]
-  );
-
-  const availableBowlers = useMemo(
-    () => allPlayers.filter((p) => p.role === 'bowl' || p.role === 'all'),
-    [allPlayers]
-  );
-
-  const getPlayerName = useCallback(
-    (id: string | null) => {
-      if (!id) return 'Select';
-      return allPlayers.find((p) => p.id === id)?.name ?? id;
-    },
-    [allPlayers]
-  );
-
-  // ---- Current over balls ----
-  const currentOverBalls = useMemo(() => {
-    let validSeen = 0;
-    let overStartIdx = balls.length;
-    for (let i = balls.length - 1; i >= 0; i--) {
-      const b = balls[i];
-      const isExtra = b?.extras?.type === 'wd' || b?.extras?.type === 'nb';
-      if (!isExtra) validSeen++;
-      if (validSeen > stats.currentBall) {
-        overStartIdx = i + 1;
-        break;
-      }
-      if (i === 0) overStartIdx = 0;
-    }
-    return balls.slice(overStartIdx);
-  }, [balls, stats]);
-
-  const batsmenStatsMap = useMemo(() => computeBatsmenStats(balls), [balls]);
-  const bowlerStatsMap = useMemo(() => computeBowlerStats(balls), [balls]);
 
   // ---- Over-change / wicket detection ----
   const prevBallsLenRef = useRef(balls.length);
@@ -198,7 +157,7 @@ export default function ScorePage() {
 
   // ---- Handlers ----
   const addBall = useCallback(
-    async (ball: Ball) => {
+    async (ball: EventSchema.BallEvent) => {
       setOptimisticBalls((prev) => [...prev, ball]);
       try {
         await addBallToMatch(ball);
@@ -221,14 +180,13 @@ export default function ScorePage() {
   const handleScore = useCallback(
     (runs: number) => {
       if (!strikerId || !bowlerId) return;
-      const newBall: Ball = {
+      const newBall = createScoreEvent({
+        matchId: matchId!,
+        inningsId: String(match?.currentInningsIndex ?? 0),
         bowlerId,
         strikerId,
-        runs,
-        extras: null,
-        wicket: null,
-        commentary: runs === 0 ? 'Dot ball' : runs === 4 ? 'FOUR!' : runs === 6 ? 'SIX!' : `${runs} run${runs !== 1 ? 's' : ''}`,
-      };
+        nonStrikerId: nonStrikerId || 'unknown',
+      }, runs);
       addBall(newBall);
       if (runs % 2 === 1) {
         const prev = strikerId;
@@ -242,14 +200,13 @@ export default function ScorePage() {
   const handleExtra = useCallback(
     (type: ExtraType) => {
       if (!strikerId || !bowlerId) return;
-      const newBall: Ball = {
+      const newBall = createExtraEvent({
+        matchId: matchId!,
+        inningsId: String(match?.currentInningsIndex ?? 0),
         bowlerId,
         strikerId,
-        runs: 0,
-        extras: { type, runs: 1 },
-        wicket: null,
-        commentary: `${type.toUpperCase()} - 1 run`,
-      };
+        nonStrikerId: nonStrikerId || 'unknown',
+      }, type as any);
       addBall(newBall);
     },
     [addBall, strikerId, bowlerId]
@@ -257,28 +214,26 @@ export default function ScorePage() {
 
   const handleWicket = useCallback(() => {
     if (!strikerId || !bowlerId) return;
-    const newBall: Ball = {
+    const newBall = createWicketEvent({
+      matchId: matchId!,
+      inningsId: String(match?.currentInningsIndex ?? 0),
       bowlerId,
       strikerId,
-      runs: 0,
-      extras: null,
-      wicket: { type: 'caught', fielderId: 'fielder1' },
-      commentary: `WICKET! ${getPlayerName(strikerId)} caught out`,
-    };
+      nonStrikerId: nonStrikerId || 'unknown',
+    }, strikerId);
     addBall(newBall);
   }, [addBall, strikerId, bowlerId, getPlayerName]);
 
   const handlePenalty = useCallback(() => {
     if (!strikerId || !bowlerId) return;
     if (!confirm('Add 5 penalty runs?')) return;
-    const newBall: Ball = {
+    const newBall = createPenaltyEvent({
+      matchId: matchId!,
+      inningsId: String(match?.currentInningsIndex ?? 0),
       bowlerId,
       strikerId,
-      runs: 5,
-      extras: null,
-      wicket: null,
-      commentary: 'PENALTY — 5 runs awarded',
-    };
+      nonStrikerId: nonStrikerId || 'unknown',
+    }, 5);
     addBall(newBall);
   }, [addBall, strikerId, bowlerId]);
 
@@ -419,9 +374,9 @@ export default function ScorePage() {
               >
                 <p className="text-[10px] text-gray-500 font-semibold tracking-widest mb-1">STRIKER</p>
                 <p className="text-sm font-bold text-white truncate">{getPlayerName(strikerId)}</p>
-                {strikerId && batsmenStatsMap.has(strikerId) && (
+                {strikerId && batsmenStatsMap[strikerId] && (
                   <p className="text-xs text-gray-400 mt-1">
-                    {batsmenStatsMap.get(strikerId)!.runs} ({batsmenStatsMap.get(strikerId)!.balls})
+                    {batsmenStatsMap[strikerId]!.runs} ({batsmenStatsMap[strikerId]!.ballsFaced})
                   </p>
                 )}
               </button>
@@ -435,9 +390,9 @@ export default function ScorePage() {
               >
                 <p className="text-[10px] text-gray-500 font-semibold tracking-widest mb-1">NON-STRIKER</p>
                 <p className="text-sm font-bold text-white truncate">{getPlayerName(nonStrikerId)}</p>
-                {nonStrikerId && batsmenStatsMap.has(nonStrikerId) && (
+                {nonStrikerId && batsmenStatsMap[nonStrikerId] && (
                   <p className="text-xs text-gray-400 mt-1">
-                    {batsmenStatsMap.get(nonStrikerId)!.runs} ({batsmenStatsMap.get(nonStrikerId)!.balls})
+                    {batsmenStatsMap[nonStrikerId]!.runs} ({batsmenStatsMap[nonStrikerId]!.ballsFaced})
                   </p>
                 )}
               </button>
@@ -451,9 +406,9 @@ export default function ScorePage() {
               >
                 <p className="text-[10px] text-gray-500 font-semibold tracking-widest mb-1">BOWLER</p>
                 <p className="text-sm font-bold text-white truncate">{getPlayerName(bowlerId)}</p>
-                {bowlerId && bowlerStatsMap.has(bowlerId) && (
+                {bowlerId && bowlerStatsMap[bowlerId] && (
                   <p className="text-xs text-gray-400 mt-1">
-                    {bowlerStatsMap.get(bowlerId)!.runs}-{bowlerStatsMap.get(bowlerId)!.wickets}
+                    {bowlerStatsMap[bowlerId]!.runs}-{bowlerStatsMap[bowlerId]!.wickets}
                   </p>
                 )}
               </button>
@@ -488,7 +443,7 @@ export default function ScorePage() {
             ) : (
               <div className="space-y-3 max-h-64 overflow-y-auto">
                 {overs.map((over, overIdx) => {
-                  const overRuns = over.reduce((sum, b) => sum + b.runs + (b.extras?.runs ?? 0), 0);
+                  const overRuns = over.reduce((sum, b) => sum + b.runs.bat + b.runs.extra + b.runs.penalty, 0);
                   return (
                     <div key={overIdx} className="flex items-center gap-3">
                       <span className="text-xs font-bold text-gray-600 w-10 shrink-0">Ov {overIdx + 1}</span>
@@ -518,7 +473,7 @@ export default function ScorePage() {
             <div className="bg-[#1E293B] rounded-2xl p-5">
               <h2 className="text-xs font-bold text-[#00FF41] tracking-widest mb-3">{pickerTitle.toUpperCase()}</h2>
               <div className="space-y-2 max-h-48 overflow-y-auto">
-                {pickerCandidates.map((p) => (
+                {pickerCandidates.map((p: any) => (
                   <button
                     key={p.id}
                     onClick={() => handlePickPlayer(p.id)}

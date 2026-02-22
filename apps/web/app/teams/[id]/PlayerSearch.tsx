@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { getFirestore, collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import type { PlayerRole, PlayerHand } from '@crichead/core';
+import { type PlayerRole, type PlayerHand, createPlayer } from '@crichead/core';
 
 export default function PlayerSearch({ teamId }: { teamId: string }) {
   const [name, setName] = useState('');
@@ -19,13 +18,7 @@ export default function PlayerSearch({ teamId }: { teamId: string }) {
     setFeedback(null);
 
     try {
-      const db = getFirestore();
-      await addDoc(collection(db, 'teams', teamId, 'players'), {
-        name: name.trim(),
-        role,
-        hand,
-        addedAt: serverTimestamp(),
-      });
+      await createPlayer(teamId, name.trim(), role, hand);
       setFeedback({ type: 'success', message: `${name.trim()} added to roster` });
       setName('');
       setRole('bat');

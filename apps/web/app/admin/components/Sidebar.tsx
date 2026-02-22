@@ -68,6 +68,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             onClick={onClose}
             className="lg:hidden p-1 rounded text-gray-400 hover:text-white transition-colors"
           >
+            {/* @ts-expect-error React 18/19 mismatch */}
             <X size={20} />
           </button>
         </div>
@@ -97,6 +98,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                   }
                 `}
               >
+                {/* @ts-expect-error React 18/19 mismatch */}
                 <Icon size={18} strokeWidth={active ? 2.5 : 1.8} />
                 {item.label}
               </Link>

@@ -1,13 +1,6 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { initializeFirebase, setStorageProvider } from '@crichead/core';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-setStorageProvider({
-  getItem: AsyncStorage.getItem.bind(AsyncStorage),
-  setItem: AsyncStorage.setItem.bind(AsyncStorage),
-  removeItem: AsyncStorage.removeItem.bind(AsyncStorage),
-});
+import { initializeFirebase } from '@crichead/core';
 
 initializeFirebase({
   apiKey: 'AIzaSyC4EKVna2ChIW0L-RXnFHt0LBkUX7NvIAI',

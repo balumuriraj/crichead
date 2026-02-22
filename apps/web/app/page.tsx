@@ -2,30 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { type FirestoreMatchDoc } from '@crichead/core';
-import { getFirestore, collection, onSnapshot, query, limit } from 'firebase/firestore';
+import { useMatchesQuery } from '@crichead/core';
 
 export default function Home() {
-  const [matches, setMatches] = useState<FirestoreMatchDoc[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const db = getFirestore();
-    const q = query(collection(db, 'matches'), limit(20));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const list: FirestoreMatchDoc[] = snap.docs.map((d) => ({
-          id: d.id,
-          ...d.data(),
-        })) as FirestoreMatchDoc[];
-        setMatches(list);
-        setLoading(false);
-      },
-      () => setLoading(false)
-    );
-    return unsub;
-  }, []);
+  const { matches, loading } = useMatchesQuery();
 
   const liveMatches = matches.filter((m) => m.status === 'live');
   const finishedMatches = matches.filter((m) => m.status === 'finished');

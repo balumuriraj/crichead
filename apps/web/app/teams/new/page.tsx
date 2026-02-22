@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getFirestore, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { createTeam } from '@crichead/core';
 
 export default function NewTeamPage() {
   const router = useRouter();
@@ -24,13 +24,7 @@ export default function NewTeamPage() {
     setError(null);
 
     try {
-      const db = getFirestore();
-      const ref = await addDoc(collection(db, 'teams'), {
-        name: name.trim(),
-        logoUrl: logoUrl.trim(),
-        homeGround: homeGround.trim(),
-        createdAt: serverTimestamp(),
-      });
+      const ref = await createTeam(name.trim(), logoUrl.trim(), homeGround.trim());
       router.push(`/teams/${ref.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create team');

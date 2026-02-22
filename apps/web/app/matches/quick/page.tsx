@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import {
   type TossDecision,
   type PlayerRole,
+  createMatch,
 } from '@crichead/core';
-import { getFirestore, collection, addDoc } from 'firebase/firestore';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -54,8 +54,6 @@ export default function QuickMatchPage() {
 
       const homePlayers = makePlayers('Home', playersPerSide);
       const awayPlayers = makePlayers('Away', playersPerSide);
-      const db = getFirestore();
-
       const matchDoc = {
         teamA: HOME_TEAM.id,
         teamB: AWAY_TEAM.id,
@@ -78,8 +76,8 @@ export default function QuickMatchPage() {
         quickMatch: true,
       };
 
-      const ref = await addDoc(collection(db, 'matches'), matchDoc);
-      router.push(`/matches/${ref.id}/score`);
+      const matchId = await createMatch(matchDoc);
+      router.push(`/matches/${matchId}/score`);
     } catch (err) {
       console.error('Failed to create quick match:', err);
       setCreating(false);
