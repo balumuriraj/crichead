@@ -11,15 +11,7 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
-import { getFirebaseDb } from '@crichead/core';
-import { collection, onSnapshot, query, orderBy, addDoc } from 'firebase/firestore';
-
-export interface TeamInfo {
-  id: string;
-  name: string;
-  logoUrl: string;
-  homeGround: string;
-}
+import { getFirebaseDb, useTeamsQuery, createTeam, type TeamInfo } from '@crichead/core';
 
 interface Props {
   onNext: (teamA: TeamInfo, teamB: TeamInfo) => void;
@@ -28,24 +20,13 @@ interface Props {
 }
 
 export default function SelectTeamsScreen({ onNext, onBack, onCancel }: Props) {
-  const [teams, setTeams] = useState<TeamInfo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { teams, loading } = useTeamsQuery();
   const [selectedA, setSelectedA] = useState<string | null>(null);
   const [selectedB, setSelectedB] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    const db = getFirebaseDb();
-    const q = query(collection(db, 'teams'), orderBy('name'));
-    const unsub = onSnapshot(q, (snap) => {
-      setTeams(snap.docs.map((d) => ({ id: d.id, ...d.data() } as TeamInfo)));
-      setLoading(false);
-    });
-    return unsub;
-  }, []);
 
   const filteredTeams = useMemo(() => {
     if (!searchQuery.trim()) return teams;
@@ -89,12 +70,7 @@ export default function SelectTeamsScreen({ onNext, onBack, onCancel }: Props) {
     if (!trimmed) return;
     setSaving(true);
     try {
-      const db = getFirebaseDb();
-      await addDoc(collection(db, 'teams'), {
-        name: trimmed,
-        logoUrl: '',
-        homeGround: '',
-      });
+      await createTeam(trimmed);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setNewTeamName('');
       setShowCreateForm(false);

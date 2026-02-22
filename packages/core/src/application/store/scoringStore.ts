@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { BallEvent, BallEventSchema } from '../schema/ballEvent';
+import { BallEvent, BallEventSchema } from '../../domain/schema/ballEvent';
 
 export interface ScoringState {
   activeEvents: BallEvent[];

@@ -1,4 +1,4 @@
-import { Ball } from '../types';
+import { Ball } from '../../domain/types';
 
 export interface InningsStats {
   totalRuns: number;

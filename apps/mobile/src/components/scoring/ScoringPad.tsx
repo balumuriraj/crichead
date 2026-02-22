@@ -70,7 +70,7 @@ export function ScoringPad({
 
         {/* Extras + Penalty row */}
         <View style={styles.extrasRow}>
-          {(['WD', 'NB', 'B', 'LB'] as ExtraType[]).map((type) => (
+          {(['WD', 'NB', 'B', 'lb'] as ExtraType[]).map((type) => (
             <TouchableOpacity
               key={type}
               style={[styles.extraButton, disabled && styles.scoringPadDisabled]}

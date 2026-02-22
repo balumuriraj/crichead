@@ -12,8 +12,7 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
-import { getFirebaseDb, type TossDecision, type PlayerRole } from '@crichead/core';
-import { addDoc, collection } from 'firebase/firestore';
+import { getFirebaseDb, type TossDecision, type PlayerRole, createMatch } from '@crichead/core';
 import type { QuickMatchConfig } from '../types/QuickMatchConfig';
 
 /* ── Temporary data ── */
@@ -119,8 +118,8 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
           innings: [{ teamId: battingFirstId, totalRuns: 0, totalWickets: 0, overs: 0, ballCount: 0 }],
           quickMatch: true,
         };
-        const ref = await addDoc(collection(db, 'matches'), matchDoc);
-        onMatchCreated(ref.id, config);
+        const matchId = await createMatch(matchDoc);
+        onMatchCreated(matchId, config);
       } else {
         onMatchCreated(null, config);
       }

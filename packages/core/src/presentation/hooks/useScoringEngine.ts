@@ -1,7 +1,7 @@
 import { useMemo, useCallback } from 'react';
-import type { BallEvent } from '../schema/ballEvent';
-import { getMatchStatus } from '../scoring/derivedState';
-import { formatOvers, calculateRunRate } from '../utils';
+import type { BallEvent } from '../../domain/schema/ballEvent';
+import { getMatchStatus } from '../../domain/scoring/derivedState';
+import { formatOvers, calculateRunRate } from '../../shared/utils';
 
 // Using `any` for match/config temporarily since those types are scattered
 export interface UseScoringEngineProps {

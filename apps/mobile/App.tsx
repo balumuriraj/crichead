@@ -5,10 +5,18 @@ import { initializeFirebase, type MatchConfig, type Toss } from '@crichead/core'
 import { getReactNativePersistence } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MatchDetailsScreen from './src/screens/MatchDetailsScreen';
-import SelectTeamsScreen, { type TeamInfo } from './src/screens/SelectTeamsScreen';
+import SelectTeamsScreen from './src/screens/SelectTeamsScreen';
+import { type TeamInfo } from '@crichead/core';
 import TossScreen from './src/screens/TossScreen';
 import SelectRosterScreen from './src/screens/SelectRosterScreen';
 import ScoringScreen from './src/screens/ScoringScreen';
+import { setStorageProvider } from '@crichead/core';
+
+setStorageProvider({
+  getItem: AsyncStorage.getItem.bind(AsyncStorage),
+  setItem: AsyncStorage.setItem.bind(AsyncStorage),
+  removeItem: AsyncStorage.removeItem.bind(AsyncStorage),
+});
 
 // Initialize Firebase before any hooks run
 initializeFirebase({

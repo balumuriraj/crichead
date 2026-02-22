@@ -9,16 +9,16 @@
       "default": "./dist/index.js"
     },
     "./firebase": {
-      "types": "./dist/firebase/index.d.ts",
-      "default": "./dist/firebase/index.js"
+      "types": "./dist/infrastructure/firebase/index.d.ts",
+      "default": "./dist/infrastructure/firebase/index.js"
     },
     "./firebase/admin": {
-      "types": "./dist/firebase/admin.d.ts",
-      "default": "./dist/firebase/admin.js"
+      "types": "./dist/infrastructure/firebase/admin.d.ts",
+      "default": "./dist/infrastructure/firebase/admin.js"
     },
     "./hooks": {
-      "types": "./dist/hooks/index.d.ts",
-      "default": "./dist/hooks/index.js"
+      "types": "./dist/presentation/hooks/index.d.ts",
+      "default": "./dist/presentation/hooks/index.js"
     }
   },
   "peerDependencies": {

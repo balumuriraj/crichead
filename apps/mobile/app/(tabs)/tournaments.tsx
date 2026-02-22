@@ -10,30 +10,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Trophy, ChevronRight } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
-import { getFirebaseDb } from '@crichead/core';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
-
-interface TournamentDoc {
-  id: string;
-  name: string;
-  type: 'league' | 'knockout';
-  status: 'upcoming' | 'ongoing' | 'completed';
-  teamIds: string[];
-}
+import { useTournamentsQuery, type TournamentDoc } from '@crichead/core';
 
 export default function TournamentsScreen() {
-  const [tournaments, setTournaments] = useState<TournamentDoc[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const db = getFirebaseDb();
-    const q = query(collection(db, 'tournaments'), orderBy('name'));
-    const unsub = onSnapshot(q, (snap) => {
-      setTournaments(snap.docs.map((d) => ({ id: d.id, ...d.data() } as TournamentDoc)));
-      setLoading(false);
-    });
-    return unsub;
-  }, []);
+  const { tournaments, loading } = useTournamentsQuery();
 
   const statusColor = (status: TournamentDoc['status']) => {
     switch (status) {

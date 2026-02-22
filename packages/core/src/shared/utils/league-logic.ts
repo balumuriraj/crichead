@@ -1,6 +1,6 @@
-import type { Match } from '../types/Match';
-import type { Innings } from '../types/Innings';
-import type { PointsSystem, PointsTableEntry } from '../types/Tournament';
+import type { Match } from '../../domain/types/Match';
+import type { Innings } from '../../domain/types/Innings';
+import type { PointsSystem, PointsTableEntry } from '../../domain/types/Tournament';
 import { calculateInningsStats } from './scoring';
 
 interface TeamNrrAccumulator {

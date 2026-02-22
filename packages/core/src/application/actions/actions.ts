@@ -1,4 +1,4 @@
-import type { BallEvent, DeliveryType } from '../schema/ballEvent';
+import type { BallEvent, DeliveryType } from '../../domain/schema/ballEvent';
 
 type CreateBallEventParams = {
   matchId: string;

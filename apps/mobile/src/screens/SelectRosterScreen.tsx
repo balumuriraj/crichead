@@ -12,16 +12,7 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
-import { getFirebaseDb, type PlayerRole, type Toss, type MatchConfig } from '@crichead/core';
-import { collection, onSnapshot, addDoc } from 'firebase/firestore';
-import type { TeamInfo } from './SelectTeamsScreen';
-
-interface PlayerDoc {
-  id: string;
-  name: string;
-  role: PlayerRole;
-  hand: 'left' | 'right';
-}
+import { getFirebaseDb, type PlayerRole, type Toss, type MatchConfig, usePlayersQuery, createPlayer, type TeamInfo, type PlayerDoc, createMatch } from '@crichead/core';
 
 interface Props {
   teamA: TeamInfo;
@@ -54,11 +45,8 @@ export default function SelectRosterScreen({
   onBack,
   onCancel,
 }: Props) {
-  const [playersA, setPlayersA] = useState<PlayerDoc[]>([]);
-  const [playersB, setPlayersB] = useState<PlayerDoc[]>([]);
   const [selectedA, setSelectedA] = useState<Set<string>>(new Set());
   const [selectedB, setSelectedB] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
   // Tab state
@@ -70,37 +58,10 @@ export default function SelectRosterScreen({
   const [newPlayerRole, setNewPlayerRole] = useState<PlayerRole>('bat');
   const [savingPlayer, setSavingPlayer] = useState(false);
 
-  useEffect(() => {
-    const db = getFirebaseDb();
-    let loaded = 0;
-    const checkLoaded = () => {
-      if (++loaded >= 2) setLoading(false);
-    };
+  const { players: playersA, loading: loadingA } = usePlayersQuery(teamA.id);
+  const { players: playersB, loading: loadingB } = usePlayersQuery(teamB.id);
 
-    const unsubA = onSnapshot(
-      collection(db, 'teams', teamA.id, 'players'),
-      (snap) => {
-        setPlayersA(
-          snap.docs.map((d) => ({ id: d.id, ...d.data() } as PlayerDoc)),
-        );
-        checkLoaded();
-      },
-    );
-    const unsubB = onSnapshot(
-      collection(db, 'teams', teamB.id, 'players'),
-      (snap) => {
-        setPlayersB(
-          snap.docs.map((d) => ({ id: d.id, ...d.data() } as PlayerDoc)),
-        );
-        checkLoaded();
-      },
-    );
-
-    return () => {
-      unsubA();
-      unsubB();
-    };
-  }, [teamA.id, teamB.id]);
+  const loading = loadingA || loadingB;
 
   const activePlayers = activeTab === 'A' ? playersA : playersB;
   const activeSelected = activeTab === 'A' ? selectedA : selectedB;
@@ -126,12 +87,7 @@ export default function SelectRosterScreen({
     if (!trimmed) return;
     setSavingPlayer(true);
     try {
-      const db = getFirebaseDb();
-      await addDoc(collection(db, 'teams', activeTeam.id, 'players'), {
-        name: trimmed,
-        role: newPlayerRole,
-        hand: 'right',
-      });
+      await createPlayer(activeTeam.id, trimmed, newPlayerRole, 'right');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setNewPlayerName('');
       setShowAddPlayer(false);
@@ -192,8 +148,8 @@ export default function SelectRosterScreen({
         playersPerSide: Math.max(xiA.length, xiB.length),
       };
 
-      const ref = await addDoc(collection(db, 'matches'), matchDoc);
-      onNext(ref.id);
+      const matchId = await createMatch(matchDoc);
+      onNext(matchId);
     } catch (err) {
       Alert.alert(
         'Error',

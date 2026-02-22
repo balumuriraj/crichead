@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { calculatePointsTable } from '../utils/league-logic';
-import type { Match } from '../types';
-import type { PointsSystem } from '../types/Tournament';
+import { calculatePointsTable } from '../shared/utils/league-logic';
+import type { Match } from '../domain/types';
+import type { PointsSystem } from '../domain/types/Tournament';
 
 const defaultPoints: PointsSystem = { win: 2, loss: 0, tie: 1, draw: 0 };
 

@@ -13,8 +13,9 @@ import {
   createExtraEvent,
   createWicketEvent,
   createPenaltyEvent,
+  updateMatchState,
+  goLiveMatch,
 } from '@crichead/core';
-import { addDoc, collection, updateDoc, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import type { QuickMatchConfig } from '../types/QuickMatchConfig';
 import {
   generateLocalId,
@@ -503,8 +504,7 @@ export function useScoringState({
       try {
         await undoLastBallFromMatch();
         if (liveMatchId) {
-          const db = getFirebaseDb();
-          updateDoc(doc(db, 'matches', liveMatchId), {
+          updateMatchState(liveMatchId, {
             currentStrikerId: ballToUndo.strikerId,
             currentNonStrikerId: ballToUndo.nonStrikerId,
           }).catch(() => {});
@@ -520,7 +520,6 @@ export function useScoringState({
   const handleGoLive = useCallback(async () => {
     if (!resolvedConfig) return;
     try {
-      const db = getFirebaseDb();
       const battingFirstId =
         resolvedConfig.toss.decision === 'bat'
           ? resolvedConfig.toss.winner
@@ -560,32 +559,18 @@ export function useScoringState({
 
       const matchStatus = localCurrentInningsIndex === 1 && allOut ? 'finished' : 'live';
 
-      const ref = await addDoc(collection(db, 'matches'), {
-        ...resolvedConfig,
-        status: matchStatus,
-        currentInningsIndex: localCurrentInningsIndex,
-        innings: inningsObj,
-        quickMatch: true,
-        currentStrikerId: strikerId,
-        currentNonStrikerId: nonStrikerId,
-        currentBowlerId: bowlerId,
-      });
+      const newLiveMatchId = await goLiveMatch(
+        resolvedConfig,
+        inningsObj,
+        matchStatus,
+        strikerId,
+        nonStrikerId,
+        bowlerId,
+        localCurrentInningsIndex,
+        localBalls
+      );
 
-      if (localBalls.length > 0) {
-        const batch = writeBatch(db);
-        const ballsRef = collection(db, 'matches', ref.id, 'innings', String(localCurrentInningsIndex), 'balls');
-        localBalls.forEach((ball, idx) => {
-          const ballDoc = doc(ballsRef);
-          batch.set(ballDoc, {
-            ...ball,
-            sequence: idx,
-            timestamp: serverTimestamp(),
-          });
-        });
-        await batch.commit();
-      }
-
-      setLiveMatchId(ref.id);
+      setLiveMatchId(newLiveMatchId);
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to go live');
     }
@@ -616,8 +601,7 @@ export function useScoringState({
           cascadeToBowlerRef.current = false;
           setPickerMode('bowler');
           if (isLiveMode && liveMatchId) {
-            const db = getFirebaseDb();
-            updateDoc(doc(db, 'matches', liveMatchId), {
+            updateMatchState(liveMatchId, {
               currentStrikerId: playerId,
               currentNonStrikerId: newNonStrikerId,
               currentBowlerId: newBowlerId,
@@ -635,8 +619,7 @@ export function useScoringState({
       setPickerMode(null);
 
       if (isLiveMode && liveMatchId) {
-        const db = getFirebaseDb();
-        updateDoc(doc(db, 'matches', liveMatchId), {
+        updateMatchState(liveMatchId, {
           currentStrikerId: newStrikerId,
           currentNonStrikerId: newNonStrikerId,
           currentBowlerId: newBowlerId,
@@ -706,10 +689,8 @@ export function useScoringState({
             setShowSettingsModal(false);
             isMatchEndedRef.current = true;
             if (isLiveMode && liveMatchId) {
-              const db = getFirebaseDb();
-              const matchRef = doc(db, 'matches', liveMatchId);
               try {
-                await updateDoc(matchRef, { status: 'abandoned' });
+                await updateMatchState(liveMatchId, { status: 'abandoned' });
               } catch (e) {
                 console.error('Failed to end live match', e);
                 Alert.alert('Error', 'Failed to end the match on the server.');

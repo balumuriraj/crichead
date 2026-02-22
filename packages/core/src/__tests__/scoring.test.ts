@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { calculateInningsStats, formatOvers, calculateRunRate } from '../utils/scoring';
-import { Ball } from '../types';
+import { calculateInningsStats, formatOvers, calculateRunRate } from '../shared/utils/scoring';
+import { Ball } from '../domain/types';
 
 describe('calculateInningsStats', () => {
   it('should correctly calculate stats for a complete over with a wide and a wicket', () => {

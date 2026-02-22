@@ -10,9 +10,9 @@ import {
   getDocs,
   limit,
 } from 'firebase/firestore';
-import { getFirebaseDb } from '../firebase/client';
-import type { BallEvent } from '../schema/ballEvent';
-import type { FirestoreMatchDoc } from '../types/Firestore';
+import { getFirebaseDb } from '../../infrastructure/firebase/client';
+import type { BallEvent } from '../../domain/schema/ballEvent';
+import type { FirestoreMatchDoc } from '../../domain/types/Firestore';
 
 export interface UseMatchSyncOptions {
   /** Subscribe to balls for the current innings. Default: false */

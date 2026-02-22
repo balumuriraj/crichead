@@ -1,4 +1,4 @@
-import type { BallEvent } from '../schema';
+import type { BallEvent } from '../../domain/schema';
 
 /**
  * Format a ball into a short display string (e.g. "W", "WD", "4", "0")

@@ -1,27 +1,29 @@
 // Export all types
-export * from './types';
+export * from './domain/types';
 
 // Export all utilities
-export * from './utils';
+export * from './shared/utils';
 
 // Export design tokens
-export * from './tokens';
+export * from './shared/tokens';
+
 
 // Export Firebase client-side utilities
-export * from './firebase';
+export * from './infrastructure/firebase';
+export * from './infrastructure/storage';
 
 // Export React hooks
-export * from './hooks';
+export * from './presentation/hooks';
 
 // Export constants
-export * from './constants/navigation';
+export * from './domain/constants/navigation';
 
 // --- New Event-Stream Architecture --- //
-export * as EventSchema from './schema';
-export * as EventScoring from './scoring';
-export * from './scoring/migrations';
-export * as EventStore from './store';
-export * from './scoring/actions';
+export * as EventSchema from './domain/schema';
+export * as EventScoring from './domain/scoring';
+export * from './domain/scoring/migrations';
+export * as EventStore from './application/store';
+export * from './application/actions/actions';
 
 /**
  * Firebase Admin SDK Usage:

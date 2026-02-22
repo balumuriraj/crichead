@@ -13,20 +13,11 @@ import { Zap, Plus, Settings, RotateCcw, Bell } from 'lucide-react-native';
 import { listLocalMatches, type LocalMatchRecord } from '../../src/utils/localMatchStore';
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
-import { getFirebaseDb } from '@crichead/core';
-import { collection, onSnapshot, query, where, limit } from 'firebase/firestore';
-
-interface MatchDoc {
-  id: string;
-  teamA: string;
-  teamB: string;
-  status: 'upcoming' | 'live' | 'finished' | 'abandoned';
-}
+import { getFirebaseDb, useMatchesQuery, type FirestoreMatchDoc } from '@crichead/core';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const [matches, setMatches] = useState<MatchDoc[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { matches, loading } = useMatchesQuery();
   const [localMatches, setLocalMatches] = useState<LocalMatchRecord[]>([]);
 
   useFocusEffect(
@@ -40,20 +31,6 @@ export default function HomeScreen() {
     }, []),
   );
 
-  useEffect(() => {
-    const db = getFirebaseDb();
-    const q = query(
-      collection(db, 'matches'),
-      where('status', 'in', ['upcoming', 'live']),
-      limit(20)
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      setMatches(snap.docs.map((d) => ({ id: d.id, ...d.data() } as MatchDoc)));
-      setLoading(false);
-    });
-    return unsub;
-  }, []);
-
   const liveMatches = matches.filter((m) => m.status === 'live');
   const upcomingMatches = matches.filter((m) => m.status === 'upcoming');
 
@@ -62,8 +39,8 @@ export default function HomeScreen() {
   const featuredLocal = localMatches[0];
   const featuredMatch = featuredOnlineLive || featuredOnlineUpcoming || featuredLocal;
 
-  const fMatchNameA = featuredMatch && 'config' in featuredMatch ? (featuredMatch as unknown as LocalMatchRecord).config.teamAName : (featuredMatch as MatchDoc)?.teamA;
-  const fMatchNameB = featuredMatch && 'config' in featuredMatch ? (featuredMatch as unknown as LocalMatchRecord).config.teamBName : (featuredMatch as MatchDoc)?.teamB;
+  const fMatchNameA = featuredMatch && 'config' in featuredMatch ? (featuredMatch as unknown as LocalMatchRecord).config.teamAName : (featuredMatch as FirestoreMatchDoc)?.teamA;
+  const fMatchNameB = featuredMatch && 'config' in featuredMatch ? (featuredMatch as unknown as LocalMatchRecord).config.teamBName : (featuredMatch as FirestoreMatchDoc)?.teamB;
   const fMatchStatus = featuredMatch && 'status' in featuredMatch ? featuredMatch.status : 'local';
 
   return (
