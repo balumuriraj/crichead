@@ -8,21 +8,26 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./hooks": {
+      "types": "./dist/hooks.d.ts",
+      "default": "./dist/hooks.js"
+    },
     "./firebase": {
-      "types": "./dist/infrastructure/firebase/index.d.ts",
-      "default": "./dist/infrastructure/firebase/index.js"
+      "types": "./dist/firebase.d.ts",
+      "default": "./dist/firebase.js"
     },
     "./firebase/admin": {
       "types": "./dist/infrastructure/firebase/admin.d.ts",
       "default": "./dist/infrastructure/firebase/admin.js"
-    },
-    "./hooks": {
-      "types": "./dist/presentation/hooks/index.d.ts",
-      "default": "./dist/presentation/hooks/index.js"
     }
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   },
   "scripts": {
     "build": "tsc",

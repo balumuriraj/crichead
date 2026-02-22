@@ -2,8 +2,8 @@
 
 import { useMemo } from 'react';
 import { useParams } from 'next/navigation';
+import { useMatchSync } from '@crichead/core/hooks';
 import {
-  useMatchSync,
   parseOvers,
   calculateRunRate,
   formatOvers,

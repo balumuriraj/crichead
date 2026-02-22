@@ -13,7 +13,9 @@ import { Zap, Plus, Settings, RotateCcw, Bell } from 'lucide-react-native';
 import { listLocalMatches, type LocalMatchRecord } from '../../src/utils/localMatchStore';
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
-import { getFirebaseDb, useMatchesQuery, type FirestoreMatchDoc } from '@crichead/core';
+import { type FirestoreMatchDoc } from '@crichead/core';
+import { useMatchesQuery } from '@crichead/core/hooks';
+import { getFirebaseDb } from '@crichead/core/firebase';
 
 export default function HomeScreen() {
   const router = useRouter();

@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { initializeFirebase, type MatchConfig, type Toss } from '@crichead/core';
+import { type MatchConfig, type Toss } from '@crichead/core';
+import { type TeamInfo } from '@crichead/core/hooks';
+import { initializeFirebase, setStorageProvider } from '@crichead/core/firebase';
 // @ts-expect-error firebase/auth export getReactNativePersistence is missing in some typedefs but exists at runtime
 import { getReactNativePersistence } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MatchDetailsScreen from './src/screens/MatchDetailsScreen';
 import SelectTeamsScreen from './src/screens/SelectTeamsScreen';
-import { type TeamInfo } from '@crichead/core';
 import TossScreen from './src/screens/TossScreen';
 import SelectRosterScreen from './src/screens/SelectRosterScreen';
 import ScoringScreen from './src/screens/ScoringScreen';
-import { setStorageProvider } from '@crichead/core';
 
 setStorageProvider({
   getItem: AsyncStorage.getItem.bind(AsyncStorage),

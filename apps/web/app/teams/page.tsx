@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useTeamsQuery, type TeamInfo } from '@crichead/core';
+import { useTeamsQuery, type TeamInfo } from '@crichead/core/hooks';
 
 export default function TeamsPage() {
   const { teams, loading } = useTeamsQuery();

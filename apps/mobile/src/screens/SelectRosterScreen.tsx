@@ -12,7 +12,9 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
-import { getFirebaseDb, type PlayerRole, type Toss, type MatchConfig, usePlayersQuery, createPlayer, type TeamInfo, type PlayerDoc, createMatch } from '@crichead/core';
+import { type PlayerRole, type Toss, type MatchConfig } from '@crichead/core';
+import { usePlayersQuery, type TeamInfo, type PlayerDoc } from '@crichead/core/hooks';
+import { getFirebaseDb, createPlayer, createMatch } from '@crichead/core/firebase';
 
 interface Props {
   teamA: TeamInfo;

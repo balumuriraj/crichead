@@ -4,7 +4,7 @@ import type { MatchConfig, Toss } from '@crichead/core';
 import type { QuickMatchConfig } from '../../src/types/QuickMatchConfig';
 import MatchDetailsScreen from '../../src/screens/MatchDetailsScreen';
 import SelectTeamsScreen from '../../src/screens/SelectTeamsScreen';
-import { type TeamInfo } from '@crichead/core';
+import { type TeamInfo } from '@crichead/core/hooks';
 import TossScreen from '../../src/screens/TossScreen';
 import SelectRosterScreen from '../../src/screens/SelectRosterScreen';
 import QuickMatchScreen from '../../src/screens/QuickMatchScreen';

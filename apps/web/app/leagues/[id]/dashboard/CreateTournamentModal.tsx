@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useTeamsQuery, createTournament } from '@crichead/core';
+import { useTeamsQuery } from '@crichead/core/hooks';
+import { createTournament } from '@crichead/core/firebase';
 
 interface Props {
   leagueId: string;

@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { initializeFirebase } from '@crichead/core';
+import { initializeFirebase } from '@crichead/core/firebase';
 
 initializeFirebase({
   apiKey: 'AIzaSyC4EKVna2ChIW0L-RXnFHt0LBkUX7NvIAI',

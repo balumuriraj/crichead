@@ -4,17 +4,21 @@ import { useRouter } from 'expo-router';
 import { type ExtraType } from '@crichead/ui/mobile';
 import {
   useMatchSync,
+  useScoringEngine,
+} from '@crichead/core/hooks';
+import {
   getFirebaseDb,
+  updateMatchState,
+  goLiveMatch,
+} from '@crichead/core/firebase';
+import {
   EventSchema,
   EventScoring,
   migrateBallToEvent,
-  useScoringEngine,
   createScoreEvent,
   createExtraEvent,
   createWicketEvent,
   createPenaltyEvent,
-  updateMatchState,
-  goLiveMatch,
 } from '@crichead/core';
 import type { QuickMatchConfig } from '../types/QuickMatchConfig';
 import {

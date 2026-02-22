@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Trophy, ChevronRight } from 'lucide-react-native';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
-import { useTournamentsQuery, type TournamentDoc } from '@crichead/core';
+import { useTournamentsQuery, type TournamentDoc } from '@crichead/core/hooks';
 
 export default function TournamentsScreen() {
   const { tournaments, loading } = useTournamentsQuery();

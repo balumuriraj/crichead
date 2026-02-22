@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useMatchesQuery } from '@crichead/core';
+import { useMatchesQuery } from '@crichead/core/hooks';
 
 export default function Home() {
   const { matches, loading } = useMatchesQuery();

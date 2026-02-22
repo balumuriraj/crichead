@@ -7,7 +7,7 @@ import {
   useTournamentQuery,
   useTournamentMatchesQuery,
   useTeamsQuery,
-} from '@crichead/core';
+} from '@crichead/core/hooks';
 import PointsTable from './PointsTable';
 import Schedule, { type MatchDoc } from './Schedule';
 import CreateTournamentModal from './CreateTournamentModal';

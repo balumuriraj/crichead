@@ -10,7 +10,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
 import type { Toss, TossDecision } from '@crichead/core';
-import { type TeamInfo } from '@crichead/core';
+import { type TeamInfo } from '@crichead/core/hooks';
 
 interface Props {
   teamA: TeamInfo;

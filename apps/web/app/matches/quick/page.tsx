@@ -2,11 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  type TossDecision,
-  createMatch,
-  makePlayers,
-} from '@crichead/core';
+import { type TossDecision, makePlayers } from '@crichead/core';
+import { createMatch } from '@crichead/core/firebase';
 
 // ---------------------------------------------------------------------------
 // Helpers

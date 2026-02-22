@@ -11,7 +11,8 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
-import { getFirebaseDb, useTeamsQuery, createTeam, type TeamInfo } from '@crichead/core';
+import { useTeamsQuery, type TeamInfo } from '@crichead/core/hooks';
+import { getFirebaseDb, createTeam } from '@crichead/core/firebase';
 
 interface Props {
   onNext: (teamA: TeamInfo, teamB: TeamInfo) => void;

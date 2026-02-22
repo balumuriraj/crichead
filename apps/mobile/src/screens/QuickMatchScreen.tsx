@@ -12,7 +12,8 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
-import { getFirebaseDb, type TossDecision, createMatch, makePlayers } from '@crichead/core';
+import { type TossDecision, makePlayers } from '@crichead/core';
+import { getFirebaseDb, createMatch } from '@crichead/core/firebase';
 import type { QuickMatchConfig } from '../types/QuickMatchConfig';
 
 /* ── Temporary data ── */

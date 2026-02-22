@@ -15,7 +15,7 @@ import {
   BorderRadius,
   Typography,
 } from '@crichead/ui/mobile';
-import { useMatchSync } from '@crichead/core';
+import { useMatchSync } from '@crichead/core/hooks';
 import { X, ChevronRight, ChevronDown } from 'lucide-react-native';
 import type { QuickMatchConfig } from '../types/QuickMatchConfig';
 import { useScoringState } from '../hooks/useScoringState';

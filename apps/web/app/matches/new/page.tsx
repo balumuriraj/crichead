@@ -7,10 +7,9 @@ import {
   type TossDecision,
   type Toss,
   type PlayerRole,
-  useTeamsQuery,
-  usePlayersQuery,
-  createMatch,
 } from '@crichead/core';
+import { useTeamsQuery, usePlayersQuery } from '@crichead/core/hooks';
+import { createMatch } from '@crichead/core/firebase';
 
 // ---------------------------------------------------------------------------
 // Types

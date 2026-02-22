@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { type PlayerRole, type PlayerHand, createPlayer } from '@crichead/core';
+import { type PlayerRole, type PlayerHand } from '@crichead/core';
+import { createPlayer } from '@crichead/core/firebase';
 
 export default function PlayerSearch({ teamId }: { teamId: string }) {
   const [name, setName] = useState('');

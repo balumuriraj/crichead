@@ -2,7 +2,7 @@
 
 import { useRef } from 'react';
 import { initializeApp, getApps } from 'firebase/app';
-import { initializeFirebase } from '@crichead/core';
+import { initializeFirebase } from '@crichead/core/firebase';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,

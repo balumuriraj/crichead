@@ -6,7 +6,7 @@ import {
   listLocalMatchesCore,
   generateLocalId,
   type LocalMatchRecord,
-} from '@crichead/core';
+} from '@crichead/core/firebase';
 
 // Ensure the core storage service uses our React Native explicit implementation
 setStorageProvider({
