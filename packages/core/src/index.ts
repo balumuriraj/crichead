@@ -5,8 +5,6 @@
 // engine, actions, session, and utilities. No React. No Firebase.
 //
 // For React hooks:     import { useScoringSession } from '@crichead/core/hooks'
-// For Firebase:        import { initializeFirebase } from '@crichead/core/firebase'
-// For Firebase Admin:  import { initializeFirebaseAdmin } from '@crichead/core/firebase/admin'
 // ============================================================================
 
 // Domain — Types

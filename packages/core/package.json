@@ -11,14 +11,6 @@
     "./hooks": {
       "types": "./dist/hooks.d.ts",
       "default": "./dist/hooks.js"
-    },
-    "./firebase": {
-      "types": "./dist/firebase.d.ts",
-      "default": "./dist/firebase.js"
-    },
-    "./firebase/admin": {
-      "types": "./dist/infrastructure/firebase/admin.d.ts",
-      "default": "./dist/infrastructure/firebase/admin.js"
     }
   },
   "peerDependencies": {
@@ -44,8 +36,6 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "firebase": "^12.9.0",
-    "firebase-admin": "^13.6.1",
     "zod": "^4.3.6",
     "zustand": "^5.0.11"
   }

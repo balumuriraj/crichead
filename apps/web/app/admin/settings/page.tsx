@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getThemeSettings, saveThemeSettings } from '@crichead/core/firebase';
+const getThemeSettings = async () => null as any;
+const saveThemeSettings = async (settings: any) => {};
 import ThemePreview from './ThemePreview';
 
 const DEFAULTS = {

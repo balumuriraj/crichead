@@ -13,8 +13,8 @@ import {
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
 import { type TossDecision, makePlayers } from '@crichead/core';
-import { getFirebaseDb, createMatch } from '@crichead/core/firebase';
 import type { QuickMatchConfig } from '../types/QuickMatchConfig';
+import { saveLocalMatch, generateLocalId } from '../utils/localMatchStore';
 
 /* ── Temporary data ── */
 
@@ -36,7 +36,6 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
   const [wickets, setWickets] = useState(10);
   const [tossWinner, setTossWinner] = useState<string | null>(null);
   const [tossDecision, setTossDecision] = useState<TossDecision | null>(null);
-  const [liveMode, setLiveMode] = useState(true);
   const [creating, setCreating] = useState(false);
 
   const homePlayers = makePlayers('Home', playersPerSide);
@@ -89,20 +88,20 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
         wicketsPerInnings: wickets,
       };
 
-      if (liveMode) {
-        const db = getFirebaseDb();
-        const matchDoc = {
-          ...config,
-          status: 'live' as const,
-          currentInningsIndex: 0,
-          innings: [{ teamId: battingFirstId, totalRuns: 0, totalWickets: 0, overs: 0, ballCount: 0 }],
-          quickMatch: true,
-        };
-        const matchId = await createMatch(matchDoc);
-        onMatchCreated(matchId, config);
-      } else {
-        onMatchCreated(null, config);
-      }
+      const localId = generateLocalId();
+      await saveLocalMatch({
+        id: localId,
+        config,
+        balls: [],
+        strikerId: null,
+        nonStrikerId: null,
+        bowlerId: null,
+        status: 'live',
+        currentInningsIndex: 0,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      onMatchCreated(`local-${localId}`, config);
     } catch (err) {
       Alert.alert(
         'Error',
@@ -253,19 +252,7 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
             </View>
           </View>
 
-          {/* Live Mode toggle */}
-          <View style={styles.settingRow}>
-            <View style={styles.settingLabelGroup}>
-              <Text style={styles.settingLabel}>Live Mode</Text>
-              <Text style={styles.settingSubLabel}>Sync scores to Firebase</Text>
-            </View>
-            <Switch
-              value={liveMode}
-              onValueChange={setLiveMode}
-              trackColor={{ false: Colors.gray700, true: Colors.electricGreen + '80' }}
-              thumbColor={liveMode ? Colors.electricGreen : Colors.gray500}
-            />
-          </View>
+
         </View>
 
         {/* Toss Card */}

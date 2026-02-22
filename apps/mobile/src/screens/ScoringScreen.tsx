@@ -9,13 +9,7 @@ import {
   Modal,
   TouchableOpacity,
 } from 'react-native';
-import {
-  Colors,
-  Spacing,
-  BorderRadius,
-  Typography,
-} from '@crichead/ui/mobile';
-import { useMatchSync } from '@crichead/core/hooks';
+import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
 import { X, ChevronRight, ChevronDown } from 'lucide-react-native';
 import type { QuickMatchConfig } from '../types/QuickMatchConfig';
 import { useScoringState } from '../hooks/useScoringState';
@@ -56,32 +50,11 @@ export default function ScoringScreen({
   initialLocalMatchId,
   onBack,
 }: ScoringScreenProps) {
-  const [liveMatchId, setLiveMatchId] = useState<string | null>(matchId);
-
-  // Firebase sync stays in the screen because liveMatchId changes after Go Live
-  const {
-    match,
-    currentInningsBalls: firestoreBalls,
-    loading: syncLoading,
-    error: syncError,
-    addBallToMatch,
-    endCurrentInnings,
-    undoLastBallFromMatch,
-  } = useMatchSync(liveMatchId, { subscribeToBalls: true });
-
   // All state, derived values, and handlers
   const scoring = useScoringState({
     matchId,
     config,
     initialLocalMatchId,
-    match,
-    firestoreBalls,
-    syncError,
-    addBallToMatch,
-    endCurrentInnings,
-    undoLastBallFromMatch,
-    liveMatchId,
-    setLiveMatchId,
   });
 
   // ---- Loading states ----
@@ -96,25 +69,14 @@ export default function ScoringScreen({
     );
   }
 
-  if (scoring.isLiveMode && syncLoading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.electricGreen} />
-          <Text style={styles.loadingText}>Connecting to match...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+
 
   return (
     <SafeAreaView style={styles.container}>
       {/* ── Header ── */}
       <ScoringHeader
         isLiveMode={scoring.isLiveMode}
-        canGoLive={scoring.canGoLive}
         onBack={onBack ?? (() => {})}
-        onGoLive={scoring.handleGoLive}
         onOpenSettings={() => scoring.setShowSettingsModal(true)}
       />
 
@@ -124,12 +86,7 @@ export default function ScoringScreen({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Sync error banner */}
-        {scoring.isLiveMode && syncError && (
-          <View style={styles.syncBanner}>
-            <Text style={styles.syncError}>{syncError.message}</Text>
-          </View>
-        )}
+
 
         <ScoreDisplay
           teamName={scoring.displayTeamName}

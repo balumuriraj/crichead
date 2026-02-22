@@ -5,17 +5,13 @@ import { Settings } from 'lucide-react-native';
 
 export interface ScoringHeaderProps {
   isLiveMode: boolean;
-  canGoLive: boolean;
   onBack: () => void;
-  onGoLive: () => void;
   onOpenSettings: () => void;
 }
 
 export function ScoringHeader({
   isLiveMode,
-  canGoLive,
   onBack,
-  onGoLive,
   onOpenSettings,
 }: ScoringHeaderProps) {
   return (
@@ -36,15 +32,6 @@ export function ScoringHeader({
       </View>
 
       <View style={styles.actions}>
-        {canGoLive && (
-          <TouchableOpacity
-            onPress={onGoLive}
-            activeOpacity={0.7}
-            style={styles.actionPad}
-          >
-            <Text style={styles.goLiveText}>Go Live</Text>
-          </TouchableOpacity>
-        )}
         <TouchableOpacity
           onPress={onOpenSettings}
           activeOpacity={0.7}

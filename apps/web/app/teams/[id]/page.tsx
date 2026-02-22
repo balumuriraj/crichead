@@ -3,13 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import {
-  getFirestore,
-  doc,
-  collection,
-  onSnapshot,
-  deleteDoc,
-} from 'firebase/firestore';
+
 import type { PlayerRole, PlayerHand } from '@crichead/core';
 import PlayerSearch from './PlayerSearch';
 
@@ -49,33 +43,17 @@ export default function TeamDetailPage() {
 
   useEffect(() => {
     if (!teamId) return;
-    const db = getFirestore();
-
-    const unsubTeam = onSnapshot(doc(db, 'teams', teamId), (snap) => {
-      if (!snap.exists()) {
-        setNotFound(true);
-        setLoading(false);
-        return;
-      }
-      setTeam(snap.data() as TeamDoc);
-      setLoading(false);
+    setTeam({
+      name: 'Mock Team ' + teamId,
+      logoUrl: '',
+      homeGround: 'Mock Stadium'
     });
-
-    const unsubPlayers = onSnapshot(collection(db, 'teams', teamId, 'players'), (snap) => {
-      setPlayers(
-        snap.docs.map((d) => ({ id: d.id, ...d.data() } as PlayerDoc))
-      );
-    });
-
-    return () => {
-      unsubTeam();
-      unsubPlayers();
-    };
+    setPlayers([]);
+    setLoading(false);
   }, [teamId]);
 
   async function handleRemovePlayer(playerId: string) {
-    const db = getFirestore();
-    await deleteDoc(doc(db, 'teams', teamId, 'players', playerId));
+    setPlayers(prev => prev.filter(p => p.id !== playerId));
   }
 
   if (loading) {

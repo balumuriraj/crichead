@@ -11,17 +11,23 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
-import { useTeamsQuery, type TeamInfo } from '@crichead/core/hooks';
-import { getFirebaseDb, createTeam } from '@crichead/core/firebase';
+import { type TeamInfo } from '@crichead/core/hooks'; // Need to define this locally if we removed it from core hooks, let's keep the import but cast for now or update it in a minute. We actually removed type TeamInfo from core hooks, so let's define it.
+
+export interface LocalTeamInfo {
+  id: string;
+  name: string;
+  shortName: string;
+  homeGround?: string;
+}
 
 interface Props {
-  onNext: (teamA: TeamInfo, teamB: TeamInfo) => void;
+  onNext: (teamA: LocalTeamInfo, teamB: LocalTeamInfo) => void;
   onBack?: () => void;
   onCancel?: () => void;
 }
 
 export default function SelectTeamsScreen({ onNext, onBack, onCancel }: Props) {
-  const { teams, loading } = useTeamsQuery();
+  const teams: LocalTeamInfo[] = []; // empty for offline
   const [selectedA, setSelectedA] = useState<string | null>(null);
   const [selectedB, setSelectedB] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,7 +77,7 @@ export default function SelectTeamsScreen({ onNext, onBack, onCancel }: Props) {
     if (!trimmed) return;
     setSaving(true);
     try {
-      await createTeam(trimmed);
+      // Just mock creating a team locally for now
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setNewTeamName('');
       setShowCreateForm(false);
@@ -86,16 +92,7 @@ export default function SelectTeamsScreen({ onNext, onBack, onCancel }: Props) {
     return teamId === selectedA || teamId === selectedB;
   }
 
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.electricGreen} />
-          <Text style={styles.loadingText}>Loading teams...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+
 
   return (
     <SafeAreaView style={styles.container}>

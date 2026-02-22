@@ -1,10 +1,8 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import FirebaseProvider from './FirebaseProvider'
+import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Crichead - Cricket Scoring Ecosystem',
-  description: 'Professional cricket scoring and management platform',
 }
 
 export default function RootLayout({
@@ -15,7 +13,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <FirebaseProvider>{children}</FirebaseProvider>
+        {children}
       </body>
     </html>
   )

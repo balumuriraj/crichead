@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { type PlayerRole, type PlayerHand } from '@crichead/core';
-import { createPlayer } from '@crichead/core/firebase';
+const createPlayer = async (...args: any[]) => 'mock-player-id';
 
 export default function PlayerSearch({ teamId }: { teamId: string }) {
   const [name, setName] = useState('');

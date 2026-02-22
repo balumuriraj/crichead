@@ -13,13 +13,9 @@ import { Zap, Plus, Settings, RotateCcw, Bell } from 'lucide-react-native';
 import { listLocalMatches, type LocalMatchRecord } from '../../src/utils/localMatchStore';
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
-import { type FirestoreMatchDoc } from '@crichead/core';
-import { useMatchesQuery } from '@crichead/core/hooks';
-import { getFirebaseDb } from '@crichead/core/firebase';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { matches, loading } = useMatchesQuery();
   const [localMatches, setLocalMatches] = useState<LocalMatchRecord[]>([]);
 
   useFocusEffect(
@@ -33,17 +29,12 @@ export default function HomeScreen() {
     }, []),
   );
 
-  const liveMatches = matches.filter((m) => m.status === 'live');
-  const upcomingMatches = matches.filter((m) => m.status === 'upcoming');
-
-  const featuredOnlineLive = liveMatches[0];
-  const featuredOnlineUpcoming = upcomingMatches[0];
   const featuredLocal = localMatches[0];
-  const featuredMatch = featuredOnlineLive || featuredOnlineUpcoming || featuredLocal;
+  const featuredMatch = featuredLocal;
 
-  const fMatchNameA = featuredMatch && 'config' in featuredMatch ? (featuredMatch as unknown as LocalMatchRecord).config.teamAName : (featuredMatch as FirestoreMatchDoc)?.teamA;
-  const fMatchNameB = featuredMatch && 'config' in featuredMatch ? (featuredMatch as unknown as LocalMatchRecord).config.teamBName : (featuredMatch as FirestoreMatchDoc)?.teamB;
-  const fMatchStatus = featuredMatch && 'status' in featuredMatch ? featuredMatch.status : 'local';
+  const fMatchNameA = featuredMatch ? featuredMatch.config.teamAName : null;
+  const fMatchNameB = featuredMatch ? featuredMatch.config.teamBName : null;
+  const fMatchStatus = featuredMatch ? featuredMatch.status : 'local';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -97,7 +88,7 @@ export default function HomeScreen() {
           <TouchableOpacity 
             style={styles.featuredCard}
             activeOpacity={0.8}
-            onPress={() => router.push('config' in featuredMatch ? `/match/local-${featuredMatch.id}` : `/match/${featuredMatch.id}`)}
+            onPress={() => router.push(`/match/local-${featuredMatch.id}`)}
           >
             <View style={styles.featuredHeader}>
               <View style={styles.featuredTag}>
@@ -116,7 +107,7 @@ export default function HomeScreen() {
                 <View style={[styles.teamCircle, { backgroundColor: '#1E3A8A' }]}>
                   <Text style={styles.teamCircleText}>{fMatchNameA?.substring(0, 3).toUpperCase() || 'TMA'}</Text>
                 </View>
-                <Text style={styles.teamNameLarge} numberOfLines={1}>{fMatchNameA?.length > 12 ? fMatchNameA.substring(0,10)+'...' : fMatchNameA}</Text>
+                <Text style={styles.teamNameLarge} numberOfLines={1}>{fMatchNameA && fMatchNameA.length > 12 ? fMatchNameA.substring(0,10)+'...' : fMatchNameA}</Text>
               </View>
               <Text style={styles.teamScoreLarge}>
                 --<Text style={styles.teamWicketsLarge}>/--</Text>
@@ -128,7 +119,7 @@ export default function HomeScreen() {
                 <View style={[styles.teamCircle, { backgroundColor: '#B45309' }]}>
                   <Text style={styles.teamCircleText}>{fMatchNameB?.substring(0, 3).toUpperCase() || 'TMB'}</Text>
                 </View>
-                <Text style={styles.teamNameLarge} numberOfLines={1}>{fMatchNameB?.length > 12 ? fMatchNameB.substring(0,10)+'...' : fMatchNameB}</Text>
+                <Text style={styles.teamNameLarge} numberOfLines={1}>{fMatchNameB && fMatchNameB.length > 12 ? fMatchNameB.substring(0,10)+'...' : fMatchNameB}</Text>
               </View>
               <Text style={styles.teamScoreLargeSub}>
                 --<Text style={styles.teamWicketsLargeSub}>/--</Text>
@@ -196,39 +187,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         ))}
 
-        {/* ── Upcoming/Live Matches from Server ── */}
-        {matches.map((m) => {
-          const isLive = m.status === 'live';
-          return (
-            <TouchableOpacity
-              key={m.id}
-              style={styles.listItem}
-              onPress={() => router.push(`/match/${m.id}`)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.listLeft}>
-                <Text style={styles.listTeamsText}>
-                  <Text style={styles.listTeamBold}>{m.teamA}</Text>
-                  <Text style={styles.listVs}> VS </Text>
-                  <Text style={styles.listTeamBold}>{m.teamB}</Text>
-                </Text>
-                <Text style={styles.listSubtitle}>
-                  ONLINE MATCH • {isLive ? 'IN PROGRESS' : 'Starts later'}
-                </Text>
-              </View>
-              <View style={styles.listRight}>
-                <Text style={styles.listScore}>--/--</Text>
-                <View style={[styles.statusBadge, isLive ? styles.statusBadgeLive : styles.statusBadgeUpcoming]}>
-                  <Text style={styles.statusBadgeText}>{isLive ? 'LIVE' : 'UPCOMING'}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
 
-        {loading && (
-          <ActivityIndicator color={Colors.electricGreen} style={{ marginTop: Spacing.xl }} />
-        )}
       </ScrollView>
     </SafeAreaView>
   );

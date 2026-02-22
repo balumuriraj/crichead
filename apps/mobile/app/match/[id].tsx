@@ -4,7 +4,7 @@ import type { MatchConfig, Toss } from '@crichead/core';
 import type { QuickMatchConfig } from '../../src/types/QuickMatchConfig';
 import MatchDetailsScreen from '../../src/screens/MatchDetailsScreen';
 import SelectTeamsScreen from '../../src/screens/SelectTeamsScreen';
-import { type TeamInfo } from '@crichead/core/hooks';
+import { type LocalTeamInfo } from '../../src/screens/SelectTeamsScreen';
 import TossScreen from '../../src/screens/TossScreen';
 import SelectRosterScreen from '../../src/screens/SelectRosterScreen';
 import QuickMatchScreen from '../../src/screens/QuickMatchScreen';
@@ -13,8 +13,8 @@ import ScoringScreen from '../../src/screens/ScoringScreen';
 type MatchStep =
   | { step: 'matchDetails' }
   | { step: 'selectTeams'; config: MatchConfig }
-  | { step: 'toss'; config: MatchConfig; teamA: TeamInfo; teamB: TeamInfo }
-  | { step: 'selectRoster'; config: MatchConfig; teamA: TeamInfo; teamB: TeamInfo; toss: Toss }
+  | { step: 'toss'; config: MatchConfig; teamA: LocalTeamInfo; teamB: LocalTeamInfo }
+  | { step: 'selectRoster'; config: MatchConfig; teamA: LocalTeamInfo; teamB: LocalTeamInfo; toss: Toss }
   | { step: 'quickMatch' }
   | { step: 'scoring'; matchId: string | null; config?: QuickMatchConfig; initialLocalMatchId?: string };
 

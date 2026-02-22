@@ -13,12 +13,18 @@ import {
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
 import { type PlayerRole, type Toss, type MatchConfig } from '@crichead/core';
-import { usePlayersQuery, type TeamInfo, type PlayerDoc } from '@crichead/core/hooks';
-import { getFirebaseDb, createPlayer, createMatch } from '@crichead/core/firebase';
+import { type LocalTeamInfo } from './SelectTeamsScreen';
+import { saveLocalMatch, generateLocalId } from '../utils/localMatchStore';
+
+export interface LocalPlayerInfo {
+  id: string;
+  name: string;
+  role: PlayerRole;
+}
 
 interface Props {
-  teamA: TeamInfo;
-  teamB: TeamInfo;
+  teamA: LocalTeamInfo;
+  teamB: LocalTeamInfo;
   toss: Toss;
   config?: MatchConfig;
   onNext: (matchId: string) => void;
@@ -60,10 +66,8 @@ export default function SelectRosterScreen({
   const [newPlayerRole, setNewPlayerRole] = useState<PlayerRole>('bat');
   const [savingPlayer, setSavingPlayer] = useState(false);
 
-  const { players: playersA, loading: loadingA } = usePlayersQuery(teamA.id);
-  const { players: playersB, loading: loadingB } = usePlayersQuery(teamB.id);
-
-  const loading = loadingA || loadingB;
+  const playersA: LocalPlayerInfo[] = []; // empty for offline mocking
+  const playersB: LocalPlayerInfo[] = []; // empty for now
 
   const activePlayers = activeTab === 'A' ? playersA : playersB;
   const activeSelected = activeTab === 'A' ? selectedA : selectedB;
@@ -89,7 +93,6 @@ export default function SelectRosterScreen({
     if (!trimmed) return;
     setSavingPlayer(true);
     try {
-      await createPlayer(activeTeam.id, trimmed, newPlayerRole, 'right');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setNewPlayerName('');
       setShowAddPlayer(false);
@@ -110,7 +113,6 @@ export default function SelectRosterScreen({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
     try {
-      const db = getFirebaseDb();
       const xiA = playersA
         .filter((p) => selectedA.has(p.id))
         .map((p) => ({ id: p.id, name: p.name, role: p.role }));
@@ -126,32 +128,29 @@ export default function SelectRosterScreen({
             ? teamB.id
             : teamA.id;
 
-      const matchDoc = {
-        teamA: teamA.id,
-        teamB: teamB.id,
-        toss,
-        status: 'live' as const,
-        currentInningsIndex: 0,
-        innings: [
-          {
-            teamId: battingFirstTeamId,
-            totalRuns: 0,
-            totalWickets: 0,
-            overs: 0,
-            ballCount: 0,
-          },
-        ],
-        playingXI: {
-          [teamA.id]: xiA,
-          [teamB.id]: xiB,
+      const localId = generateLocalId();
+      await saveLocalMatch({
+        id: localId,
+        config: {
+          teamAId: teamA.id,
+          teamAName: teamA.name,
+          teamBId: teamB.id,
+          teamBName: teamB.name,
+          matchType: 'limitedOvers',
+          oversPerInnings: config?.oversPerInnings ?? 20,
+          wicketsPerInnings: config?.wicketsPerInnings ?? 10,
         },
-        oversPerInnings: config?.oversPerInnings ?? 20,
-        wicketsPerInnings: config?.wicketsPerInnings ?? 10,
-        playersPerSide: Math.max(xiA.length, xiB.length),
-      };
+        status: 'live',
+        currentInningsIndex: 0,
+        balls: [],
+        strikerId: null,
+        nonStrikerId: null,
+        bowlerId: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      });
 
-      const matchId = await createMatch(matchDoc);
-      onNext(matchId);
+      onNext(`local-${localId}`);
     } catch (err) {
       Alert.alert(
         'Error',
@@ -163,16 +162,7 @@ export default function SelectRosterScreen({
 
   const canStart = selectedA.size > 0 && selectedB.size > 0 && !creating;
 
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.electricGreen} />
-          <Text style={styles.loadingText}>Loading rosters...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+
 
   return (
     <SafeAreaView style={styles.container}>

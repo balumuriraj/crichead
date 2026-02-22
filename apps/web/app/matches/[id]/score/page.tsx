@@ -2,10 +2,7 @@
 
 import { useMemo, useCallback, useRef, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import {
-  useMatchSync,
-  useScoringSession,
-} from '@crichead/core/hooks';
+import { useScoringSession } from '@crichead/core/hooks';
 import {
   formatBallDisplay,
   splitBallsIntoOvers,
@@ -38,15 +35,22 @@ function getBallColor(ball: EventSchema.BallEvent): string {
 
 export default function ScorePage() {
   const params = useParams();
-  const matchId = typeof params.id === 'string' ? params.id : null;
+  const matchId = typeof params.id === 'string' ? params.id : 'local';
 
-  const {
-    match,
-    currentInningsBalls: firestoreBalls,
-    loading,
-    error,
-    addBallToMatch,
-  } = useMatchSync(matchId, { subscribeToBalls: true });
+  const match: any = useMemo(() => ({
+    id: matchId,
+    status: 'live',
+    currentInningsIndex: 0,
+    innings: [],
+    teamA: 'Team A',
+    teamB: 'Team B',
+    oversPerInnings: 20,
+    format: 't20',
+    toss: { winner: 'Team A', decision: 'bat' as const },
+  }), [matchId]);
+  
+  const loading = false;
+  const error: any = null;
 
   // ---- ScoringSession from core ----
   const {
@@ -73,68 +77,34 @@ export default function ScorePage() {
     localFirstInningsRuns: null,
   });
 
-  // ---- Sync Firestore balls into the session ----
-  const prevFirestoreLenRef = useRef(firestoreBalls.length);
-  useEffect(() => {
-    if (firestoreBalls.length > prevFirestoreLenRef.current) {
-      // Firestore confirmed new balls — update session state
-      session.setBalls(firestoreBalls);
-    }
-    prevFirestoreLenRef.current = firestoreBalls.length;
-  }, [firestoreBalls.length, session]);
 
-  // Use session balls. Merge with firestoreBalls as the source of truth for confirmed data.
   const balls = sessionBalls;
 
   // ---- Optimistic remote sync wrappers ----
   const handleScore = useCallback(
     (runs: number) => {
-      const ball = sessionHandleScore(runs);
-      if (ball) {
-        addBallToMatch(ball).catch(() => {
-          session.undoBall();
-          alert('Failed to save ball. Please try again.');
-        });
-      }
+      sessionHandleScore(runs);
     },
-    [sessionHandleScore, addBallToMatch, session]
+    [sessionHandleScore]
   );
 
   const extraMap: Record<WebExtraType, ExtraTypeCode> = { wd: 'WD', nb: 'NB', b: 'B', lb: 'LB' };
 
   const handleExtra = useCallback(
     (type: WebExtraType) => {
-      const ball = sessionHandleExtra(extraMap[type]);
-      if (ball) {
-        addBallToMatch(ball).catch(() => {
-          session.undoBall();
-          alert('Failed to save ball. Please try again.');
-        });
-      }
+      sessionHandleExtra(extraMap[type]);
     },
-    [sessionHandleExtra, addBallToMatch, session]
+    [sessionHandleExtra]
   );
 
   const handleWicket = useCallback(() => {
-    const ball = sessionHandleWicket();
-    if (ball) {
-      addBallToMatch(ball).catch(() => {
-        session.undoBall();
-        alert('Failed to save ball. Please try again.');
-      });
-    }
-  }, [sessionHandleWicket, addBallToMatch, session]);
+    sessionHandleWicket();
+  }, [sessionHandleWicket]);
 
   const handlePenalty = useCallback(() => {
     if (!confirm('Add 5 penalty runs?')) return;
-    const ball = sessionHandlePenalty();
-    if (ball) {
-      addBallToMatch(ball).catch(() => {
-        session.undoBall();
-        alert('Failed to save ball. Please try again.');
-      });
-    }
-  }, [sessionHandlePenalty, addBallToMatch, session]);
+    sessionHandlePenalty();
+  }, [sessionHandlePenalty]);
 
   const handleUndo = useCallback(() => {
     sessionUndoBall();
@@ -186,7 +156,7 @@ export default function ScorePage() {
             {error ? 'Connection Error' : 'Match Not Found'}
           </h1>
           <p className="text-gray-400 text-sm mb-6">
-            {error?.message ?? `No match found with ID "${matchId}"`}
+            {'No match found with ID "' + matchId + '"'}
           </p>
           <a href="/" className="inline-block px-6 py-2 rounded-lg bg-[#00FF41]/10 text-[#00FF41] border border-[#00FF41]/30 text-sm font-semibold hover:bg-[#00FF41]/20 transition-colors">
             Back to Home

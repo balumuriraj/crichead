@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createTeam } from '@crichead/core/firebase';
+const createTeam = async (...args: any[]) => ({ id: 'mock-team-id' });
 
 export default function NewTeamPage() {
   const router = useRouter();

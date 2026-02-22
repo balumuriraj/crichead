@@ -3,14 +3,8 @@ import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { type ExtraType } from '@crichead/ui/mobile';
 import {
-  useMatchSync,
   useScoringEngine,
 } from '@crichead/core/hooks';
-import {
-  getFirebaseDb,
-  updateMatchState,
-  goLiveMatch,
-} from '@crichead/core/firebase';
 import {
   EventSchema,
   EventScoring,
@@ -32,20 +26,10 @@ import type { TabKey, PickerMode, PlayerInfo } from '../types/scoring';
 // Types
 // ---------------------------------------------------------------------------
 
-type UseMatchSyncReturn = ReturnType<typeof useMatchSync>;
-
 interface UseScoringStateInput {
   matchId: string | null;
   config?: QuickMatchConfig;
   initialLocalMatchId?: string;
-  match: UseMatchSyncReturn['match'];
-  firestoreBalls: UseMatchSyncReturn['currentInningsBalls'];
-  syncError: UseMatchSyncReturn['error'];
-  addBallToMatch: UseMatchSyncReturn['addBallToMatch'];
-  endCurrentInnings: UseMatchSyncReturn['endCurrentInnings'];
-  undoLastBallFromMatch: UseMatchSyncReturn['undoLastBallFromMatch'];
-  liveMatchId: string | null;
-  setLiveMatchId: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 export interface ScoringState {
@@ -106,7 +90,6 @@ export interface ScoringState {
   handleWicket: () => void;
   handlePenalty: () => void;
   handleUndo: () => void;
-  handleGoLive: () => Promise<void>;
   handlePickPlayer: (playerId: string) => void;
   handleSwapStrike: () => void;
   handleEndInnings: () => Promise<void>;
@@ -122,14 +105,6 @@ export interface ScoringState {
 export function useScoringState({
   config,
   initialLocalMatchId,
-  match,
-  firestoreBalls,
-  syncError: _syncError,
-  addBallToMatch,
-  endCurrentInnings,
-  undoLastBallFromMatch,
-  liveMatchId,
-  setLiveMatchId,
 }: UseScoringStateInput): ScoringState {
   const router = useRouter();
 
@@ -154,12 +129,11 @@ export function useScoringState({
   const [expandedSection, setExpandedSection] = useState<string | null>('Match Settings');
   const [showOverCompleteModal, setShowOverCompleteModal] = useState(false);
 
-  const isLiveMode = liveMatchId !== null;
+  const isLiveMode = false;
 
   // ---- Stable refs ----
   const localMatchIdRef = useRef<string>(initialLocalMatchId ?? generateLocalId());
   const isMatchEndedRef = useRef<boolean>(false);
-  const prevFirestoreLenRef = useRef(firestoreBalls.length);
 
   // ---- Load from AsyncStorage when resuming a local match ----
   useEffect(() => {
@@ -189,8 +163,8 @@ export function useScoringState({
 
   const engineState = useScoringEngine({
     balls,
-    config: resolvedConfig,
-    match,
+    config: resolvedConfig ?? null,
+    match: null,
     isLiveMode,
     localCurrentInningsIndex,
     localFirstInningsRuns,
@@ -340,30 +314,6 @@ export function useScoringState({
     prevMatchFinishedRef.current = isMatchFinished;
   }, [isMatchFinished]);
 
-  // ---- Initialize live balls once ----
-  const hasInitializedLiveBallsRef = useRef(false);
-  useEffect(() => {
-    if (!isLiveMode || !match || hasInitializedLiveBallsRef.current) return;
-    const expectedBalls = match.innings[match.currentInningsIndex]?.ballCount ?? 0;
-    if (firestoreBalls.length === expectedBalls) {
-      if (firestoreBalls.length > 0 && localBalls.length === 0) {
-        setLocalBalls(firestoreBalls);
-      }
-      hasInitializedLiveBallsRef.current = true;
-    }
-  }, [isLiveMode, match, firestoreBalls, localBalls.length]);
-
-  // ---- Load live player state from Firestore on first match load ----
-  const hasLoadedPlayersRef = useRef(false);
-
-  useEffect(() => {
-    if (!isLiveMode || !match || hasLoadedPlayersRef.current) return;
-    if (match.currentStrikerId) setStrikerId(match.currentStrikerId);
-    if (match.currentNonStrikerId) setNonStrikerId(match.currentNonStrikerId);
-    if (match.currentBowlerId) setBowlerId(match.currentBowlerId);
-    hasLoadedPlayersRef.current = true;
-  }, [match, isLiveMode]);
-
   // ---- Persist local match state to AsyncStorage ----
   useEffect(() => {
     if (isLiveMode || !resolvedConfig || isMatchEndedRef.current) return;
@@ -396,25 +346,8 @@ export function useScoringState({
   const addBall = useCallback(
     async (ball: EventSchema.BallEvent) => {
       setLocalBalls((prev) => [...prev, ball]);
-      
-      if (isLiveMode) {
-        try {
-          await addBallToMatch(ball);
-        } catch {
-          setLocalBalls((prev) => {
-            const idx = prev.lastIndexOf(ball);
-            if (idx !== -1) {
-              const next = [...prev];
-              next.splice(idx, 1);
-              return next;
-            }
-            return prev;
-          });
-          Alert.alert('Sync Error', 'Failed to save ball. Please try again.');
-        }
-      }
     },
-    [isLiveMode, addBallToMatch]
+    []
   );
 
   const handleScore = useCallback(
@@ -422,7 +355,7 @@ export function useScoringState({
       if (!strikerId || !bowlerId) return;
       
       const newBall = createScoreEvent({
-        matchId: liveMatchId || localMatchIdRef.current,
+        matchId: localMatchIdRef.current,
         inningsId: String(currentInningsIndex),
         bowlerId,
         strikerId,
@@ -436,32 +369,37 @@ export function useScoringState({
         setNonStrikerId(prev);
       }
     },
-    [addBall, strikerId, nonStrikerId, bowlerId, liveMatchId, currentInningsIndex]
+    [addBall, strikerId, nonStrikerId, bowlerId, currentInningsIndex]
   );
 
   const handleExtra = useCallback(
     (type: ExtraType) => {
       if (!strikerId || !bowlerId) return;
+      const extraMap: Record<string, 'wd' | 'nb' | 'b' | 'lb'> = {
+        WD: 'wd', NB: 'nb', B: 'b', LB: 'lb',
+        wd: 'wd', nb: 'nb', b: 'b', lb: 'lb'
+      };
       
-      const extraMap: Record<ExtraType, 'WD' | 'NB' | 'B' | 'LB'> = { WD: 'WD', NB: 'NB', B: 'B', LB: 'LB' };
+      const mappedType = extraMap[type as string];
+
       const newBall = createExtraEvent({
-        matchId: liveMatchId || localMatchIdRef.current,
+        matchId: localMatchIdRef.current,
         inningsId: String(currentInningsIndex),
         bowlerId,
         strikerId,
         nonStrikerId: nonStrikerId || 'unknown',
-      }, extraMap[type]);
+      }, type as any);
       
       addBall(newBall);
     },
-    [addBall, strikerId, bowlerId, nonStrikerId, liveMatchId, currentInningsIndex]
+    [addBall, strikerId, bowlerId, nonStrikerId, currentInningsIndex]
   );
 
   const handleWicket = useCallback(() => {
     if (!strikerId || !bowlerId) return;
     
     const newBall = createWicketEvent({
-      matchId: liveMatchId || localMatchIdRef.current,
+      matchId: localMatchIdRef.current,
       inningsId: String(currentInningsIndex),
       bowlerId,
       strikerId,
@@ -469,7 +407,7 @@ export function useScoringState({
     }, strikerId);
     
     addBall(newBall);
-  }, [addBall, strikerId, bowlerId, nonStrikerId, liveMatchId, currentInningsIndex]);
+  }, [addBall, strikerId, bowlerId, nonStrikerId, currentInningsIndex]);
 
   const handlePenalty = useCallback(() => {
     if (!strikerId || !bowlerId) return;
@@ -482,7 +420,7 @@ export function useScoringState({
           text: 'Add 5 Runs',
           onPress: () => {
             const newBall = createPenaltyEvent({
-              matchId: liveMatchId || localMatchIdRef.current,
+              matchId: localMatchIdRef.current,
               inningsId: String(currentInningsIndex),
               bowlerId,
               strikerId,
@@ -493,7 +431,7 @@ export function useScoringState({
         },
       ]
     );
-  }, [addBall, strikerId, bowlerId, nonStrikerId, liveMatchId, currentInningsIndex]);
+  }, [addBall, strikerId, bowlerId, nonStrikerId, currentInningsIndex]);
 
   const handleUndo = useCallback(async () => {
     if (localBalls.length === 0) return;
@@ -504,94 +442,8 @@ export function useScoringState({
     // Restore the striker and non-striker to who they were at the start of the undone ball
     setStrikerId(ballToUndo.strikerId);
     setNonStrikerId(ballToUndo.nonStrikerId);
-    
-    if (isLiveMode) {
-      try {
-        await undoLastBallFromMatch();
-        if (liveMatchId) {
-          updateMatchState(liveMatchId, {
-            currentStrikerId: ballToUndo.strikerId,
-            currentNonStrikerId: ballToUndo.nonStrikerId,
-          }).catch(() => {});
-        }
-      } catch (err) {
-        console.error('Failed to undo ball from Firebase:', err);
-        setLocalBalls((prev) => [...prev, ballToUndo]); // revert
-        Alert.alert('Sync Error', 'Failed to undo ball on the server. Please check your connection.');
-      }
-    }
-  }, [isLiveMode, localBalls, undoLastBallFromMatch]);
+  }, [localBalls]);
 
-  const handleGoLive = useCallback(async () => {
-    if (!resolvedConfig) return;
-    try {
-      const battingFirstId =
-        resolvedConfig.toss.decision === 'bat'
-          ? resolvedConfig.toss.winner
-          : resolvedConfig.toss.winner === resolvedConfig.teamA
-            ? resolvedConfig.teamB
-            : resolvedConfig.teamA;
-
-      const inningsObj = [];
-      const firstInningsTeamId = battingFirstId;
-      const secondBattingTeamId =
-        firstInningsTeamId === resolvedConfig.teamA ? resolvedConfig.teamB : resolvedConfig.teamA;
-
-      if (localCurrentInningsIndex === 0) {
-        inningsObj.push({
-          teamId: firstInningsTeamId,
-          totalRuns: stats.totalRuns,
-          totalWickets: stats.totalWickets,
-          overs: stats.currentOver + stats.currentBall / 10,
-          ballCount: balls.length,
-        });
-      } else {
-        inningsObj.push({
-          teamId: firstInningsTeamId,
-          totalRuns: localFirstInningsRuns ?? 0,
-          totalWickets: 10, // Assuming all out or overs done for a local match
-          overs: resolvedConfig.oversPerInnings,
-          ballCount: resolvedConfig.oversPerInnings * 6,
-        });
-        inningsObj.push({
-          teamId: secondBattingTeamId,
-          totalRuns: stats.totalRuns,
-          totalWickets: stats.totalWickets,
-          overs: stats.currentOver + stats.currentBall / 10,
-          ballCount: balls.length,
-        });
-      }
-
-      const matchStatus = localCurrentInningsIndex === 1 && allOut ? 'finished' : 'live';
-
-      const newLiveMatchId = await goLiveMatch(
-        resolvedConfig,
-        inningsObj,
-        matchStatus,
-        strikerId,
-        nonStrikerId,
-        bowlerId,
-        localCurrentInningsIndex,
-        localBalls
-      );
-
-      setLiveMatchId(newLiveMatchId);
-    } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to go live');
-    }
-  }, [
-    resolvedConfig,
-    localCurrentInningsIndex,
-    localFirstInningsRuns,
-    stats,
-    balls.length,
-    allOut,
-    strikerId,
-    nonStrikerId,
-    bowlerId,
-    localBalls,
-    setLiveMatchId,
-  ]);
 
   const handlePickPlayer = useCallback(
     (playerId: string) => {
@@ -605,13 +457,6 @@ export function useScoringState({
         if (cascadeToBowlerRef.current) {
           cascadeToBowlerRef.current = false;
           setPickerMode('bowler');
-          if (isLiveMode && liveMatchId) {
-            updateMatchState(liveMatchId, {
-              currentStrikerId: playerId,
-              currentNonStrikerId: newNonStrikerId,
-              currentBowlerId: newBowlerId,
-            }).catch(() => {});
-          }
           return;
         }
       } else if (pickerMode === 'nonStriker') {
@@ -622,16 +467,8 @@ export function useScoringState({
         newBowlerId = playerId;
       }
       setPickerMode(null);
-
-      if (isLiveMode && liveMatchId) {
-        updateMatchState(liveMatchId, {
-          currentStrikerId: newStrikerId,
-          currentNonStrikerId: newNonStrikerId,
-          currentBowlerId: newBowlerId,
-        }).catch(() => {});
-      }
     },
-    [pickerMode, strikerId, nonStrikerId, bowlerId, isLiveMode, liveMatchId]
+    [pickerMode, strikerId, nonStrikerId, bowlerId]
   );
 
   const handleSwapStrike = useCallback(() => {
@@ -651,58 +488,38 @@ export function useScoringState({
           text: 'End Innings',
           style: 'destructive',
           onPress: async () => {
-            if (isLiveMode) {
-              try {
-                await endCurrentInnings();
-                setShowOverCompleteModal(false);
-                setBowlerId(null);
-              } catch (e) {
-                console.error('Failed to end current innings', e);
-                Alert.alert('Error', 'Failed to end the innings on the server.');
-              }
+            if (localCurrentInningsIndex === 0) {
+              setLocalFirstInningsRuns(stats.totalRuns);
+              setLocalCurrentInningsIndex(1);
+              setLocalBalls([]);
+              setShowOverCompleteModal(false);
+              setBowlerId(null);
+              setStrikerId(null);
+              setNonStrikerId(null);
             } else {
-              if (localCurrentInningsIndex === 0) {
-                setLocalFirstInningsRuns(stats.totalRuns);
-                setLocalCurrentInningsIndex(1);
-                setLocalBalls([]);
-                setShowOverCompleteModal(false);
-                setBowlerId(null);
-                setStrikerId(null);
-                setNonStrikerId(null);
-              } else {
-                Alert.alert('Match Ended', 'The local match is over.');
-                setShowOverCompleteModal(false);
-                setBowlerId(null);
-              }
+              Alert.alert('Match Ended', 'The local match is over.');
+              setShowOverCompleteModal(false);
+              setBowlerId(null);
             }
           }
         }
       ]
     );
-  }, [isLiveMode, endCurrentInnings, localCurrentInningsIndex, stats.totalRuns]);
+  }, [localCurrentInningsIndex, stats.totalRuns]);
 
   const handleEndMatch = useCallback(async () => {
     Alert.alert(
-      isLiveMode ? 'End Match' : 'Abandon Match',
-      `Are you sure you want to ${isLiveMode ? 'end' : 'abandon'} this match? This cannot be undone.`,
+      'End Match',
+      `Are you sure you want to end this match? This cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: isLiveMode ? 'End Match' : 'Abandon Match',
+          text: 'End Match',
           style: 'destructive',
           onPress: async () => {
             setShowSettingsModal(false);
             isMatchEndedRef.current = true;
-            if (isLiveMode && liveMatchId) {
-              try {
-                await updateMatchState(liveMatchId, { status: 'abandoned' });
-              } catch (e) {
-                console.error('Failed to end live match', e);
-                Alert.alert('Error', 'Failed to end the match on the server.');
-                isMatchEndedRef.current = false;
-                return;
-              }
-            } else if (!isLiveMode && resolvedConfig) {
+            if (resolvedConfig) {
               await saveLocalMatch({
                 id: localMatchIdRef.current,
                 config: resolvedConfig,
@@ -723,15 +540,15 @@ export function useScoringState({
       ]
     );
   }, [
-    isLiveMode, liveMatchId, resolvedConfig, localBalls, strikerId, nonStrikerId, bowlerId, router,
+    resolvedConfig, localBalls, strikerId, nonStrikerId, bowlerId, router,
     localCurrentInningsIndex, localFirstInningsRuns
   ]);
 
   return {
     localLoading,
     isLiveMode,
-    canGoLive: !isLiveMode && resolvedConfig !== undefined,
-    displayTeamName,
+    canGoLive: false,
+    displayTeamName: displayTeamName ?? 'Unknown',
     currentOverFormatted,
     runRate,
     balls,
@@ -772,7 +589,6 @@ export function useScoringState({
     handleWicket,
     handlePenalty,
     handleUndo,
-    handleGoLive,
     handlePickPlayer,
     handleSwapStrike,
     handleEndInnings,

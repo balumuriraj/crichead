@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useMatchesQuery } from '@crichead/core/hooks';
 
 export default function Home() {
-  const { matches, loading } = useMatchesQuery();
-
+  const loading = false;
+  const matches: any[] = [];
+  
   const liveMatches = matches.filter((m) => m.status === 'live');
   const finishedMatches = matches.filter((m) => m.status === 'finished');
 

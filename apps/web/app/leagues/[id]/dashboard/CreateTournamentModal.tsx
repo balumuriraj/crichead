@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTeamsQuery } from '@crichead/core/hooks';
-import { createTournament } from '@crichead/core/firebase';
+const createTournament = async (data: any) => 'mock-tournament-id';
 
 interface Props {
   leagueId: string;

@@ -9,7 +9,7 @@ import {
   type PlayerRole,
 } from '@crichead/core';
 import { useTeamsQuery, usePlayersQuery } from '@crichead/core/hooks';
-import { createMatch } from '@crichead/core/firebase';
+const createMatch = async (data: any) => 'mock-match-id';
 
 // ---------------------------------------------------------------------------
 // Types

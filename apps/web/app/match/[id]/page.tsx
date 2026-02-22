@@ -2,7 +2,6 @@
 
 import { useMemo } from 'react';
 import { useParams } from 'next/navigation';
-import { useMatchSync } from '@crichead/core/hooks';
 import {
   parseOvers,
   calculateRunRate,
@@ -41,12 +40,16 @@ export default function MatchPage() {
   const params = useParams();
   const matchId = typeof params.id === 'string' ? params.id : null;
 
-  const {
-    match,
-    currentInningsBalls: balls,
-    loading,
-    error,
-  } = useMatchSync(matchId, { subscribeToBalls: true });
+  const match: any = {
+    status: 'upcoming',
+    innings: [],
+    currentInningsIndex: 0,
+    teamA: 'Team A',
+    teamB: 'Team B',
+  };
+  const balls: any[] = [];
+  const loading = false;
+  const error: any = null;
 
   const currentInnings = match?.innings[match.currentInningsIndex] ?? null;
 
@@ -84,7 +87,7 @@ export default function MatchPage() {
             {error ? 'Connection Error' : 'Match Not Found'}
           </h1>
           <p className="text-gray-400 text-sm mb-6">
-            {error?.message ?? `No match found with ID "${matchId}"`}
+            {'No match found with ID "' + matchId + '"'}
           </p>
           <a
             href="/"
@@ -171,7 +174,7 @@ export default function MatchPage() {
         {/* All Innings Summaries (if multiple) */}
         {match.innings.length > 1 && (
           <div className="grid grid-cols-2 gap-4">
-            {match.innings.map((inn, idx) => {
+            {match.innings.map((inn: any, idx: number) => {
               const innStats = getStatsFromSummary(inn);
               const isActive = idx === match.currentInningsIndex;
               return (

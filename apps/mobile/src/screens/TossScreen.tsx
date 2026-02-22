@@ -10,11 +10,11 @@ import {
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
 import type { Toss, TossDecision } from '@crichead/core';
-import { type TeamInfo } from '@crichead/core/hooks';
+import { type LocalTeamInfo } from './SelectTeamsScreen';
 
 interface Props {
-  teamA: TeamInfo;
-  teamB: TeamInfo;
+  teamA: LocalTeamInfo;
+  teamB: LocalTeamInfo;
   onNext: (toss: Toss) => void;
   onBack: () => void;
   onCancel?: () => void;

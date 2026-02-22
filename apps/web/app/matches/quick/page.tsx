@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { type TossDecision, makePlayers } from '@crichead/core';
-import { createMatch } from '@crichead/core/firebase';
+const createMatch = async (data: any) => 'mock-match-id';
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -1,40 +1,17 @@
 import { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { type MatchConfig, type Toss } from '@crichead/core';
-import { type TeamInfo } from '@crichead/core/hooks';
-import { initializeFirebase, setStorageProvider } from '@crichead/core/firebase';
-// @ts-expect-error firebase/auth export getReactNativePersistence is missing in some typedefs but exists at runtime
-import { getReactNativePersistence } from 'firebase/auth';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import MatchDetailsScreen from './src/screens/MatchDetailsScreen';
-import SelectTeamsScreen from './src/screens/SelectTeamsScreen';
+import SelectTeamsScreen, { type LocalTeamInfo } from './src/screens/SelectTeamsScreen';
 import TossScreen from './src/screens/TossScreen';
 import SelectRosterScreen from './src/screens/SelectRosterScreen';
 import ScoringScreen from './src/screens/ScoringScreen';
 
-setStorageProvider({
-  getItem: AsyncStorage.getItem.bind(AsyncStorage),
-  setItem: AsyncStorage.setItem.bind(AsyncStorage),
-  removeItem: AsyncStorage.removeItem.bind(AsyncStorage),
-});
-
-// Initialize Firebase before any hooks run
-initializeFirebase({
-    apiKey: 'AIzaSyC4EKVna2ChIW0L-RXnFHt0LBkUX7NvIAI',
-    authDomain: 'crichead-app.firebaseapp.com',
-    projectId: 'crichead-app',
-    storageBucket: 'crichead-app.firebasestorage.app',
-    messagingSenderId: '345345271554',
-    appId: '1:345345271554:web:f2dc213b6cbf909639441b',
-  },
-  getReactNativePersistence(AsyncStorage)
-);
-
 type AppScreen =
   | { name: 'matchDetails' }
   | { name: 'selectTeams'; config: MatchConfig }
-  | { name: 'toss'; config: MatchConfig; teamA: TeamInfo; teamB: TeamInfo }
-  | { name: 'selectRoster'; config: MatchConfig; teamA: TeamInfo; teamB: TeamInfo; toss: Toss }
+  | { name: 'toss'; config: MatchConfig; teamA: LocalTeamInfo; teamB: LocalTeamInfo }
+  | { name: 'selectRoster'; config: MatchConfig; teamA: LocalTeamInfo; teamB: LocalTeamInfo; toss: Toss }
   | { name: 'scoring'; matchId: string };
 
 export default function App() {
