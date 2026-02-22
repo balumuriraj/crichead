@@ -45,7 +45,7 @@ export function ScoreButton({
     };
     const text: TextStyle = {
       fontSize: Typography.fontSize['3xl'],
-      fontWeight: Typography.fontWeight.bold,
+      fontWeight: Typography.fontWeight.bold as TextStyle['fontWeight'],
       color: colors.white,
     };
     const boundaryText: TextStyle = {

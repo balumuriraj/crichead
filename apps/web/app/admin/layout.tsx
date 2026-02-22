@@ -20,7 +20,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden p-1.5 rounded-lg text-gray-400 hover:bg-white/5 hover:text-white transition-colors"
           >
-            {/* @ts-expect-error React 18/19 mismatch */}
             <Menu size={20} />
           </button>
           <Breadcrumbs />

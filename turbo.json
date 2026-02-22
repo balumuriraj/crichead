@@ -6,6 +6,9 @@
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
+    "@crichead/mobile#build": {
+      "outputs": []
+    },
     "lint": {
       "dependsOn": ["^lint"]
     },

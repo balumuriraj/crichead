@@ -55,7 +55,33 @@ export const BorderRadius = {
   full: 9999,
 } as const;
 
-export const Typography = {
+export interface TypographyTokens {
+  fontFamily: {
+    regular: string;
+    medium: string;
+    bold: string;
+  };
+  fontSize: {
+    xs: number;
+    sm: number;
+    base: number;
+    lg: number;
+    xl: number;
+    '2xl': number;
+    '3xl': number;
+    '4xl': number;
+    '5xl': number;
+  };
+  fontWeight: {
+    regular: '400';
+    medium: '500';
+    semibold: '600';
+    bold: '700';
+    extrabold: '800';
+  };
+}
+
+export const Typography: TypographyTokens = {
   fontFamily: {
     regular: 'System',
     medium: 'System',
@@ -73,10 +99,10 @@ export const Typography = {
     '5xl': 48,
   },
   fontWeight: {
-    regular: '400' as const,
-    medium: '500' as const,
-    semibold: '600' as const,
-    bold: '700' as const,
-    extrabold: '800' as const,
+    regular: '400',
+    medium: '500',
+    semibold: '600',
+    bold: '700',
+    extrabold: '800',
   },
-} as const;
+};

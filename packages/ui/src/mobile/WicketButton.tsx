@@ -52,7 +52,7 @@ export function WicketButton({
     const icon: TextStyle = { fontSize: Typography.fontSize['3xl'] };
     const text: TextStyle = {
       fontSize: Typography.fontSize['2xl'],
-      fontWeight: Typography.fontWeight.extrabold,
+      fontWeight: Typography.fontWeight.extrabold as TextStyle['fontWeight'],
       color: colors.white,
       letterSpacing: 1,
     };

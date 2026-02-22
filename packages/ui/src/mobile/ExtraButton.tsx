@@ -49,13 +49,13 @@ export function ExtraButton({
     };
     const abbreviation: TextStyle = {
       fontSize: Typography.fontSize.xl,
-      fontWeight: Typography.fontWeight.bold,
+      fontWeight: Typography.fontWeight.bold as TextStyle['fontWeight'],
       color: colors.electricGreen,
       marginBottom: 2,
     };
     const label: TextStyle = {
       fontSize: Typography.fontSize.xs,
-      fontWeight: Typography.fontWeight.medium,
+      fontWeight: Typography.fontWeight.medium as TextStyle['fontWeight'],
       color: colors.textSecondary,
     };
     const disabledStyle: ViewStyle = { opacity: 0.5 };

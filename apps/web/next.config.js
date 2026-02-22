@@ -3,4 +3,4 @@ const nextConfig = {
   transpilePackages: ['@crichead/core', '@crichead/ui'],
 }
 
-module.exports = nextConfig
+export default nextConfig

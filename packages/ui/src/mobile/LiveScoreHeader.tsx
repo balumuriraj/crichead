@@ -37,7 +37,7 @@ export function LiveScoreHeader({
     };
     const teamNameText: TextStyle = {
       fontSize: Typography.fontSize.sm,
-      fontWeight: Typography.fontWeight.bold,
+      fontWeight: Typography.fontWeight.bold as TextStyle['fontWeight'],
       color: colors.electricGreen,
       letterSpacing: 1,
       marginBottom: Spacing.xs,
@@ -49,7 +49,7 @@ export function LiveScoreHeader({
     };
     const score: TextStyle = {
       fontSize: Typography.fontSize['5xl'],
-      fontWeight: Typography.fontWeight.extrabold,
+      fontWeight: Typography.fontWeight.extrabold as TextStyle['fontWeight'],
       color: colors.white,
       lineHeight: Typography.fontSize['5xl'],
     };
@@ -59,7 +59,7 @@ export function LiveScoreHeader({
     };
     const oversText: TextStyle = {
       fontSize: Typography.fontSize.lg,
-      fontWeight: Typography.fontWeight.medium,
+      fontWeight: Typography.fontWeight.medium as TextStyle['fontWeight'],
       color: colors.textSecondary,
       marginLeft: Spacing.sm,
     };
@@ -67,14 +67,14 @@ export function LiveScoreHeader({
     const infoItem: ViewStyle = { flex: 1 };
     const infoLabel: TextStyle = {
       fontSize: Typography.fontSize.xs,
-      fontWeight: Typography.fontWeight.semibold,
+      fontWeight: Typography.fontWeight.semibold as TextStyle['fontWeight'],
       color: colors.textSecondary,
       letterSpacing: 0.5,
       marginBottom: 2,
     };
     const infoValue: TextStyle = {
       fontSize: Typography.fontSize.base,
-      fontWeight: Typography.fontWeight.bold,
+      fontWeight: Typography.fontWeight.bold as TextStyle['fontWeight'],
       color: colors.electricGreen,
     };
     return { container, teamNameText, scoreRow, score, wicketsText, oversText, infoRow, infoItem, infoLabel, infoValue };

@@ -1,6 +1,7 @@
 {
   "name": "@crichead/core",
   "version": "0.0.0",
+  "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -14,7 +15,7 @@
     }
   },
   "peerDependencies": {
-    "react": "^18.0.0 || ^19.0.0"
+    "react": "^19.0.0"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -30,7 +31,7 @@
     "test:ui": "vitest --ui"
   },
   "devDependencies": {
-    "@types/react": "^18.3.18 || ^19.0.0",
+    "@types/react": "^19.2.14",
     "@vitest/ui": "^4.0.18",
     "typescript": "^5.7.3",
     "vitest": "^4.0.18"

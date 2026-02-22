@@ -31,13 +31,11 @@ export default function Breadcrumbs() {
         href="/admin"
         className="text-gray-500 hover:text-white transition-colors"
       >
-        {/* @ts-expect-error React 18/19 mismatch with lucide */}
         <Home size={14} />
       </Link>
 
       {crumbs.slice(1).map((crumb) => (
         <span key={crumb.href} className="flex items-center gap-1.5">
-          {/* @ts-expect-error React 18/19 mismatch with lucide */}
           <ChevronRight size={12} className="text-gray-600" />
           {crumb.isLast ? (
             <span className="text-gray-300 font-medium">{crumb.label}</span>
