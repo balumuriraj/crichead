@@ -1,26 +1,21 @@
 'use client';
 
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useMemo, useCallback, useRef, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import {
   useMatchSync,
-  useScoringEngine,
+  useScoringSession,
   formatBallDisplay,
   splitBallsIntoOvers,
   EventSchema,
-  type PlayingXIEntry,
-  createScoreEvent,
-  createExtraEvent,
-  createWicketEvent,
-  createPenaltyEvent,
+  type ExtraTypeCode,
 } from '@crichead/core';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type PickerMode = 'striker' | 'nonStriker' | 'bowler' | null;
-type ExtraType = 'wd' | 'nb' | 'b' | 'lb';
+type WebExtraType = 'wd' | 'nb' | 'b' | 'lb';
 
 // ---------------------------------------------------------------------------
 // Ball color helper (Tailwind classes — web only)
@@ -51,36 +46,99 @@ export default function ScorePage() {
     addBallToMatch,
   } = useMatchSync(matchId, { subscribeToBalls: true });
 
-  // ---- Optimistic updates ----
-  const [optimisticBalls, setOptimisticBalls] = useState<EventSchema.BallEvent[]>([]);
-
-  // ---- Player state ----
-  const [strikerId, setStrikerId] = useState<string | null>(null);
-  const [nonStrikerId, setNonStrikerId] = useState<string | null>(null);
-  const [bowlerId, setBowlerId] = useState<string | null>(null);
-  const [pickerMode, setPickerMode] = useState<PickerMode>('striker');
-
-  // ---- Reconcile optimistic balls ----
-  const prevFirestoreLenRef = useRef(firestoreBalls.length);
-
-  const balls = useMemo(() => {
-    const newlyConfirmed = Math.max(0, firestoreBalls.length - prevFirestoreLenRef.current);
-    const pendingOptimistic = optimisticBalls.slice(newlyConfirmed);
-    return [...firestoreBalls, ...pendingOptimistic];
-  }, [firestoreBalls, optimisticBalls]);
-
-  const engineState = useScoringEngine({
-    balls,
+  // ---- ScoringSession from core ----
+  const {
+    balls: sessionBalls,
+    strikerId,
+    nonStrikerId,
+    bowlerId,
+    pickerMode,
+    engineState,
+    handleScore: sessionHandleScore,
+    handleExtra: sessionHandleExtra,
+    handleWicket: sessionHandleWicket,
+    handlePenalty: sessionHandlePenalty,
+    undoBall: sessionUndoBall,
+    pickPlayer: handlePickPlayer,
+    setPickerMode,
+    session,
+  } = useScoringSession({
+    matchId: matchId || '',
     config: match,
     match,
     isLiveMode: true,
     localCurrentInningsIndex: 0,
     localFirstInningsRuns: null,
-    strikerId,
-    nonStrikerId,
-    bowlerId,
   });
 
+  // ---- Sync Firestore balls into the session ----
+  const prevFirestoreLenRef = useRef(firestoreBalls.length);
+  useEffect(() => {
+    if (firestoreBalls.length > prevFirestoreLenRef.current) {
+      // Firestore confirmed new balls — update session state
+      session.setBalls(firestoreBalls);
+    }
+    prevFirestoreLenRef.current = firestoreBalls.length;
+  }, [firestoreBalls.length, session]);
+
+  // Use session balls. Merge with firestoreBalls as the source of truth for confirmed data.
+  const balls = sessionBalls;
+
+  // ---- Optimistic remote sync wrappers ----
+  const handleScore = useCallback(
+    (runs: number) => {
+      const ball = sessionHandleScore(runs);
+      if (ball) {
+        addBallToMatch(ball).catch(() => {
+          session.undoBall();
+          alert('Failed to save ball. Please try again.');
+        });
+      }
+    },
+    [sessionHandleScore, addBallToMatch, session]
+  );
+
+  const extraMap: Record<WebExtraType, ExtraTypeCode> = { wd: 'WD', nb: 'NB', b: 'B', lb: 'LB' };
+
+  const handleExtra = useCallback(
+    (type: WebExtraType) => {
+      const ball = sessionHandleExtra(extraMap[type]);
+      if (ball) {
+        addBallToMatch(ball).catch(() => {
+          session.undoBall();
+          alert('Failed to save ball. Please try again.');
+        });
+      }
+    },
+    [sessionHandleExtra, addBallToMatch, session]
+  );
+
+  const handleWicket = useCallback(() => {
+    const ball = sessionHandleWicket();
+    if (ball) {
+      addBallToMatch(ball).catch(() => {
+        session.undoBall();
+        alert('Failed to save ball. Please try again.');
+      });
+    }
+  }, [sessionHandleWicket, addBallToMatch, session]);
+
+  const handlePenalty = useCallback(() => {
+    if (!confirm('Add 5 penalty runs?')) return;
+    const ball = sessionHandlePenalty();
+    if (ball) {
+      addBallToMatch(ball).catch(() => {
+        session.undoBall();
+        alert('Failed to save ball. Please try again.');
+      });
+    }
+  }, [sessionHandlePenalty, addBallToMatch, session]);
+
+  const handleUndo = useCallback(() => {
+    sessionUndoBall();
+  }, [sessionUndoBall]);
+
+  // ---- Destructure engine state ----
   const {
     stats,
     currentOverFormatted,
@@ -102,166 +160,6 @@ export default function ScorePage() {
   const batsmenStatsMap = stats.batterStats;
   const bowlerStatsMap = stats.bowlerStats;
   const inputDisabled = isInningsComplete || !playersReady || pickerMode !== null;
-
-  // ---- Over-change / wicket detection ----
-  const prevBallsLenRef = useRef(balls.length);
-  const prevOverRef = useRef(stats.currentOver);
-  const prevWicketsRef = useRef(stats.totalWickets);
-  const strikerIdRef = useRef(strikerId);
-  const nonStrikerIdRef = useRef(nonStrikerId);
-  strikerIdRef.current = strikerId;
-  nonStrikerIdRef.current = nonStrikerId;
-
-  useEffect(() => {
-    const prevLen = prevBallsLenRef.current;
-    if (balls.length < prevLen) {
-      prevBallsLenRef.current = balls.length;
-      prevOverRef.current = stats.currentOver;
-      prevWicketsRef.current = stats.totalWickets;
-      return;
-    }
-    if (balls.length === prevLen) return;
-
-    const prevOver = prevOverRef.current;
-    const prevWickets = prevWicketsRef.current;
-    prevBallsLenRef.current = balls.length;
-    prevOverRef.current = stats.currentOver;
-    prevWicketsRef.current = stats.totalWickets;
-
-    const overChanged = stats.currentOver > prevOver;
-    const wicketFell = stats.totalWickets > prevWickets;
-
-    if (wicketFell && overChanged) {
-      setStrikerId(null);
-      setBowlerId(null);
-      setTimeout(() => setPickerMode('striker'), 300);
-    } else if (wicketFell) {
-      setStrikerId(null);
-      setTimeout(() => setPickerMode('striker'), 300);
-    } else if (overChanged) {
-      setStrikerId(nonStrikerIdRef.current);
-      setNonStrikerId(strikerIdRef.current);
-      setBowlerId(null);
-      setTimeout(() => setPickerMode('bowler'), 300);
-    }
-  }, [balls.length, stats]);
-
-  // ---- Reconcile optimistic balls ----
-  useEffect(() => {
-    if (firestoreBalls.length > prevFirestoreLenRef.current) {
-      const newBallsCount = firestoreBalls.length - prevFirestoreLenRef.current;
-      setOptimisticBalls((prev) => prev.slice(newBallsCount));
-    }
-    prevFirestoreLenRef.current = firestoreBalls.length;
-  }, [firestoreBalls.length]);
-
-  // ---- Handlers ----
-  const addBall = useCallback(
-    async (ball: EventSchema.BallEvent) => {
-      setOptimisticBalls((prev) => [...prev, ball]);
-      try {
-        await addBallToMatch(ball);
-      } catch {
-        setOptimisticBalls((prev) => {
-          const idx = prev.indexOf(ball);
-          if (idx !== -1) {
-            const next = [...prev];
-            next.splice(idx, 1);
-            return next;
-          }
-          return prev;
-        });
-        alert('Failed to save ball. Please try again.');
-      }
-    },
-    [addBallToMatch]
-  );
-
-  const handleScore = useCallback(
-    (runs: number) => {
-      if (!strikerId || !bowlerId) return;
-      const newBall = createScoreEvent({
-        matchId: matchId!,
-        inningsId: String(match?.currentInningsIndex ?? 0),
-        bowlerId,
-        strikerId,
-        nonStrikerId: nonStrikerId || 'unknown',
-      }, runs);
-      addBall(newBall);
-      if (runs % 2 === 1) {
-        const prev = strikerId;
-        setStrikerId(nonStrikerId);
-        setNonStrikerId(prev);
-      }
-    },
-    [addBall, strikerId, nonStrikerId, bowlerId]
-  );
-
-  const handleExtra = useCallback(
-    (type: ExtraType) => {
-      if (!strikerId || !bowlerId) return;
-      const extraMap: Record<ExtraType, 'WD' | 'NB' | 'B' | 'LB'> = { wd: 'WD', nb: 'NB', b: 'B', lb: 'LB' };
-      const newBall = createExtraEvent({
-        matchId: matchId!,
-        inningsId: String(match?.currentInningsIndex ?? 0),
-        bowlerId,
-        strikerId,
-        nonStrikerId: nonStrikerId || 'unknown',
-      }, extraMap[type]);
-      addBall(newBall);
-    },
-    [addBall, strikerId, bowlerId]
-  );
-
-  const handleWicket = useCallback(() => {
-    if (!strikerId || !bowlerId) return;
-    const newBall = createWicketEvent({
-      matchId: matchId!,
-      inningsId: String(match?.currentInningsIndex ?? 0),
-      bowlerId,
-      strikerId,
-      nonStrikerId: nonStrikerId || 'unknown',
-    }, strikerId);
-    addBall(newBall);
-  }, [addBall, strikerId, bowlerId, getPlayerName]);
-
-  const handlePenalty = useCallback(() => {
-    if (!strikerId || !bowlerId) return;
-    if (!confirm('Add 5 penalty runs?')) return;
-    const newBall = createPenaltyEvent({
-      matchId: matchId!,
-      inningsId: String(match?.currentInningsIndex ?? 0),
-      bowlerId,
-      strikerId,
-      nonStrikerId: nonStrikerId || 'unknown',
-    }, 5);
-    addBall(newBall);
-  }, [addBall, strikerId, bowlerId]);
-
-  const handleUndo = useCallback(() => {
-    if (optimisticBalls.length > 0) {
-      setOptimisticBalls((prev) => prev.slice(0, -1));
-    }
-  }, [optimisticBalls.length]);
-
-  const handlePickPlayer = useCallback(
-    (playerId: string) => {
-      if (pickerMode === 'striker') {
-        setStrikerId(playerId);
-        if (!nonStrikerId) setTimeout(() => setPickerMode('nonStriker'), 100);
-        else if (!bowlerId) setTimeout(() => setPickerMode('bowler'), 100);
-        else setPickerMode(null);
-      } else if (pickerMode === 'nonStriker') {
-        setNonStrikerId(playerId);
-        if (!bowlerId) setTimeout(() => setPickerMode('bowler'), 100);
-        else setPickerMode(null);
-      } else if (pickerMode === 'bowler') {
-        setBowlerId(playerId);
-        setPickerMode(null);
-      }
-    },
-    [pickerMode, nonStrikerId, bowlerId]
-  );
 
   // ---- Overs display ----
   const overs = useMemo(() => splitBallsIntoOvers(balls), [balls]);
@@ -524,7 +422,7 @@ export default function ScorePage() {
           <div className="bg-[#1E293B] rounded-2xl p-5">
             <h2 className="text-xs font-bold text-gray-500 tracking-widest mb-3">EXTRAS</h2>
             <div className="grid grid-cols-4 gap-2">
-              {(['wd', 'nb', 'b', 'lb'] as ExtraType[]).map((type) => (
+              {(['wd', 'nb', 'b', 'lb'] as WebExtraType[]).map((type) => (
                 <button
                   key={type}
                   onClick={() => handleExtra(type)}
@@ -558,7 +456,7 @@ export default function ScorePage() {
           {/* Undo */}
           <button
             onClick={handleUndo}
-            disabled={optimisticBalls.length === 0}
+            disabled={balls.length === 0}
             className="w-full h-11 rounded-xl bg-[#334155] text-gray-300 font-semibold text-sm hover:bg-[#334155]/80 transition-all duration-150 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
           >
             Undo

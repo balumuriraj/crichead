@@ -24,6 +24,8 @@ export * as EventScoring from './domain/scoring';
 export * from './domain/scoring/migrations';
 export * as EventStore from './application/store';
 export * from './application/actions/actions';
+export { ScoringSession, type ScoringSessionConfig, type ScoringSessionSnapshot } from './application/ScoringSession';
+export { type PickerMode, type PlayerInfo, type ExtraTypeCode } from './application/types';
 
 /**
  * Firebase Admin SDK Usage:
