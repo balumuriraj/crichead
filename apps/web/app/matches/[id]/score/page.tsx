@@ -200,13 +200,14 @@ export default function ScorePage() {
   const handleExtra = useCallback(
     (type: ExtraType) => {
       if (!strikerId || !bowlerId) return;
+      const extraMap: Record<ExtraType, 'WD' | 'NB' | 'B' | 'LB'> = { wd: 'WD', nb: 'NB', b: 'B', lb: 'LB' };
       const newBall = createExtraEvent({
         matchId: matchId!,
         inningsId: String(match?.currentInningsIndex ?? 0),
         bowlerId,
         strikerId,
         nonStrikerId: nonStrikerId || 'unknown',
-      }, type as any);
+      }, extraMap[type]);
       addBall(newBall);
     },
     [addBall, strikerId, bowlerId]
@@ -473,7 +474,7 @@ export default function ScorePage() {
             <div className="bg-[#1E293B] rounded-2xl p-5">
               <h2 className="text-xs font-bold text-[#00FF41] tracking-widest mb-3">{pickerTitle.toUpperCase()}</h2>
               <div className="space-y-2 max-h-48 overflow-y-auto">
-                {pickerCandidates.map((p: any) => (
+                {pickerCandidates.map((p: { id: string; name: string; role: string }) => (
                   <button
                     key={p.id}
                     onClick={() => handlePickPlayer(p.id)}

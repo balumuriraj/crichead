@@ -1,4 +1,4 @@
-import type { BallEvent, DeliveryType } from '../../domain/schema/ballEvent';
+import type { BallEvent, DeliveryType, WicketTypeEvent } from '../../domain/schema/ballEvent';
 
 type CreateBallEventParams = {
   matchId: string;
@@ -62,7 +62,7 @@ export function createExtraEvent(
 export function createWicketEvent(
   params: CreateBallEventParams,
   dismissedId: string,
-  wicketType: any = 'caught',
+  wicketType: WicketTypeEvent = 'caught',
   fielderId?: string,
   commentary?: string
 ): BallEvent {

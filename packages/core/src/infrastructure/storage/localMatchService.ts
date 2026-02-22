@@ -1,13 +1,10 @@
 import { getStorageProvider } from './StorageProvider';
 import type { BallEvent } from '../../domain/schema/ballEvent';
-
-// We inline QuickMatchConfig or import it if needed. Assuming it exists in domain/types.
-// Wait, QuickMatchConfig was localized in matchService or mobile app. Let's just use `any` or redefine it.
-// I will use `any` for config since we just stringify/parse it anyway.
+import type { ScoringConfig } from '../../domain/types/ScoringConfig';
 
 export interface LocalMatchRecord {
   id: string;
-  config: any;
+  config: ScoringConfig;
   balls: BallEvent[];
   strikerId: string | null;
   nonStrikerId: string | null;

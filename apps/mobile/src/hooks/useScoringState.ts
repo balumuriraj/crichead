@@ -162,7 +162,7 @@ export function useScoringState({
     if (!initialLocalMatchId) return;
     loadLocalMatch(initialLocalMatchId).then((record) => {
       if (record) {
-        setResolvedConfig(record.config);
+        setResolvedConfig(record.config as QuickMatchConfig);
         setLocalBalls((record.balls as any[]).map(b => 
           b.deliveryType ? b : migrateBallToEvent(b, record.id, String(record.currentInningsIndex || 0))
         ));
@@ -439,13 +439,14 @@ export function useScoringState({
     (type: ExtraType) => {
       if (!strikerId || !bowlerId) return;
       
+      const extraMap: Record<ExtraType, 'WD' | 'NB' | 'B' | 'LB'> = { WD: 'WD', NB: 'NB', B: 'B', LB: 'LB' };
       const newBall = createExtraEvent({
         matchId: liveMatchId || localMatchIdRef.current,
         inningsId: String(currentInningsIndex),
         bowlerId,
         strikerId,
         nonStrikerId: nonStrikerId || 'unknown',
-      }, type as any);
+      }, extraMap[type]);
       
       addBall(newBall);
     },

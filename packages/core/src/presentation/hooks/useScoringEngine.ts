@@ -1,13 +1,15 @@
 import { useMemo, useCallback } from 'react';
 import type { BallEvent } from '../../domain/schema/ballEvent';
+import type { MatchConfig } from '../../domain/schema/matchConfig';
 import { getMatchStatus } from '../../domain/scoring/derivedState';
 import { formatOvers, calculateRunRate } from '../../shared/utils';
+import type { ScoringConfig } from '../../domain/types/ScoringConfig';
+import type { FirestoreMatchDoc, PlayingXIEntry } from '../../domain/types/Firestore';
 
-// Using `any` for match/config temporarily since those types are scattered
 export interface UseScoringEngineProps {
   balls: BallEvent[];
-  config: any; // e.g. QuickMatchConfig
-  match?: any; // e.g. FirestoreMatchDoc
+  config: ScoringConfig | null;
+  match?: FirestoreMatchDoc | null;
   
   isLiveMode: boolean;
   localCurrentInningsIndex: number;
@@ -30,7 +32,7 @@ export function useScoringEngine({
   bowlerId,
 }: UseScoringEngineProps) {
   
-  const dummyConfig = useMemo(() => ({ v: 1, format: 't20', oversPerInnings: 20, wicketsPerInnings: 10, venue: '', scheduledDate: '', playersPerSide: 11 } as any), []);
+  const dummyConfig = useMemo((): MatchConfig => ({ v: 1, format: 't20', oversPerInnings: 20, wicketsPerInnings: 10, venue: '', scheduledDate: '', playersPerSide: 11 }), []);
   const stats = useMemo(() => getMatchStatus(balls, config || dummyConfig), [balls, config, dummyConfig]);
 
   const currentOverFormatted = formatOvers(stats.currentOver, stats.currentBall);
@@ -43,7 +45,7 @@ export function useScoringEngine({
   const currentInningsIndex = isLiveMode ? (match?.currentInningsIndex ?? 0) : localCurrentInningsIndex;
 
   const firstInningsRuns = isLiveMode
-    ? (match && match.innings?.length > 1 ? match.innings[0].totalRuns : null)
+    ? (match && match.innings?.length > 1 ? match.innings[0]?.totalRuns ?? null : null)
     : localFirstInningsRuns;
   const isChasing = currentInningsIndex === 1 && firstInningsRuns !== null;
 
@@ -66,13 +68,13 @@ export function useScoringEngine({
     : config
       ? (localCurrentInningsIndex === 0
           ? (config.toss?.decision === 'bat'
-              ? config.toss.winner
-              : config.toss.winner === config.teamA
+              ? config.toss?.winner ?? null
+              : config.toss?.winner === config.teamA
                 ? config.teamB
                 : config.teamA)
           : (config.toss?.decision === 'bat'
-              ? (config.toss.winner === config.teamA ? config.teamB : config.teamA)
-              : config.toss.winner)
+              ? (config.toss?.winner === config.teamA ? config.teamB : config.teamA)
+              : config.toss?.winner ?? null)
         )
       : null;
 
@@ -87,14 +89,14 @@ export function useScoringEngine({
     if (!battingTeamId) return [];
     const xi = isLiveMode ? match?.playingXI : config?.playingXI;
     if (!xi) return [];
-    return (xi[battingTeamId] ?? []).map((p: any) => ({ id: p.id, name: p.name, role: p.role }));
+    return (xi[battingTeamId] ?? []).map((p: PlayingXIEntry) => ({ id: p.id, name: p.name, role: p.role }));
   }, [isLiveMode, match, config, battingTeamId]);
 
   const bowlingTeamPlayers = useMemo(() => {
     if (!bowlingTeamId) return [];
     const xi = isLiveMode ? match?.playingXI : config?.playingXI;
     if (!xi) return [];
-    return (xi[bowlingTeamId] ?? []).map((p: any) => ({ id: p.id, name: p.name, role: p.role }));
+    return (xi[bowlingTeamId] ?? []).map((p: PlayingXIEntry) => ({ id: p.id, name: p.name, role: p.role }));
   }, [isLiveMode, match, config, bowlingTeamId]);
 
   const allPlayers = useMemo(() => {
@@ -112,7 +114,7 @@ export function useScoringEngine({
   }, [balls]);
 
   const availableBatsmen = useMemo(() => {
-    return battingTeamPlayers.filter((p: any) =>
+    return battingTeamPlayers.filter((p) =>
       !dismissedIds.has(p.id) &&
       p.id !== strikerId &&
       p.id !== nonStrikerId
@@ -123,7 +125,7 @@ export function useScoringEngine({
     // If an over just completed, exclude the bowler who bowled it
     if (stats.currentOver > 0 && stats.currentBall === 0 && balls.length > 0) {
       const lastBowlerId = balls[balls.length - 1]!.bowlerId;
-      return bowlingTeamPlayers.filter((p: any) => p.id !== lastBowlerId);
+      return bowlingTeamPlayers.filter((p) => p.id !== lastBowlerId);
     }
     return bowlingTeamPlayers;
   }, [bowlingTeamPlayers, stats.currentOver, stats.currentBall, balls]);

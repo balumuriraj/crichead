@@ -1,6 +1,7 @@
 import { addDoc, collection, updateDoc, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { getFirebaseDb } from './client';
-import type { MatchConfig } from '../../domain/types';
+import type { MatchConfig, ScoringConfig, FirestoreInningsSummary } from '../../domain/types';
+import type { BallEvent } from '../../domain/schema/ballEvent';
 export interface QuickMatchConfig {
   teamAName: string;
   teamBName: string;
@@ -21,7 +22,7 @@ export async function createQuickMatch(config: QuickMatchConfig) {
   });
 }
 
-export async function createMatch(matchData: any) {
+export async function createMatch(matchData: Record<string, unknown>) {
   const db = getFirebaseDb();
   const docRef = await addDoc(collection(db, 'matches'), matchData);
   return docRef.id;
@@ -40,14 +41,14 @@ export async function updateMatchState(matchId: string, stateUpdate: MatchLiveSt
 }
 
 export async function goLiveMatch(
-  config: any, 
-  inningsObj: any[], 
+  config: ScoringConfig, 
+  inningsObj: FirestoreInningsSummary[], 
   matchStatus: string, 
   strikerId: string | null, 
   nonStrikerId: string | null, 
   bowlerId: string | null, 
   localCurrentInningsIndex: number, 
-  localBalls: any[]
+  localBalls: BallEvent[]
 ) {
   const db = getFirebaseDb();
   const ref = await addDoc(collection(db, 'matches'), {

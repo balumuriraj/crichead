@@ -1,4 +1,10 @@
-import { BallEvent, MatchConfig } from '../schema';
+import { BallEvent } from '../schema';
+
+/** The minimal subset of match config that the scoring engine needs */
+export interface ScoringEngineConfig {
+  oversPerInnings?: number;
+  wicketsPerInnings?: number;
+}
 
 export interface BowlerStats {
   validBalls: number;
@@ -47,7 +53,7 @@ export interface DerivedMatchState {
 
 export function getMatchStatus(
   events: BallEvent[],
-  config: MatchConfig,
+  config: ScoringEngineConfig,
   targetScore?: number
 ): DerivedMatchState {
   const state: DerivedMatchState = {
@@ -69,7 +75,7 @@ export function getMatchStatus(
 
   if (targetScore) {
     state.runsNeeded = targetScore;
-    state.ballsRemaining = config.oversPerInnings * 6;
+    state.ballsRemaining = (config.oversPerInnings ?? 20) * 6;
     state.isTargetReached = false;
   }
 
@@ -226,7 +232,7 @@ export function getMatchStatus(
   // Final check for match/innings completion
   state.isAllOut = state.totalWickets >= (config.wicketsPerInnings || 10);
   
-  const reachedOversLimit = state.currentOver >= config.oversPerInnings;
+  const reachedOversLimit = state.currentOver >= (config.oversPerInnings ?? 20);
   state.isInningsComplete = state.isAllOut || reachedOversLimit || (state.isTargetReached ?? false);
 
   return state;

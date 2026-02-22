@@ -1,7 +1,7 @@
-import type { Toss } from '@crichead/core';
+import type { Toss, ScoringConfig } from '@crichead/core';
 import type { PlayingXIEntry } from '@crichead/core';
 
-export interface QuickMatchConfig {
+export interface QuickMatchConfig extends ScoringConfig {
   teamA: string;
   teamAName: string;
   teamB: string;
@@ -10,5 +10,4 @@ export interface QuickMatchConfig {
   playingXI: Record<string, PlayingXIEntry[]>;
   oversPerInnings: number;
   playersPerSide: number;
-  wicketsPerInnings?: number;
 }
