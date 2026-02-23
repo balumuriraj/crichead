@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { PickerMode } from '../../types/scoring';
+import type { PickerMode } from '@crichead/core';
 
 interface UseOverCompletionFlowInput {
   ballsLength: number;

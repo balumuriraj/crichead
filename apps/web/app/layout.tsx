@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import './globals.css'
+import { Providers } from './Providers'
 
 export const metadata: Metadata = {
 }
@@ -13,7 +13,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   )

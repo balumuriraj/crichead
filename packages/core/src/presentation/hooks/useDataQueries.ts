@@ -1,95 +1,74 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { FirestoreMatchDoc, PlayerRole, Tournament } from '../../domain/types';
-import { makePlayers } from '../../shared/utils';
+import { useEffect, useState } from 'react';
+import type { FirestoreMatchDoc } from '../../domain/types';
+import type { TeamRecord, PlayerRecord, TournamentRecord } from '../../application/ports/DataProvider';
+import { useDataProvider } from '../DataProviderContext';
 
-export interface TeamInfo {
-  id: string;
-  name: string;
-  logoUrl?: string;
-  homeGround?: string;
-}
+// Re-export port record types as the hook-level API types.
+// Consumers already import these names from @crichead/core/hooks.
+export type TeamInfo = TeamRecord;
+export type PlayerInfo = PlayerRecord;
 
-export interface PlayerInfo {
-  id: string;
-  name: string;
-  role: PlayerRole;
-}
-
-export interface TournamentInfo extends Tournament {
-  teamIds: string[];
-}
-
+export interface TournamentInfo extends TournamentRecord {}
 export type TournamentDoc = TournamentInfo;
 
-type StoredPlayers = Record<string, PlayerInfo[]>;
-
-const TEAMS_KEY = 'crichead:teams';
-const PLAYERS_KEY = 'crichead:players';
-const TOURNAMENTS_KEY = 'crichead:tournaments';
-const TOURNAMENT_MATCHES_KEY = 'crichead:tournamentMatches';
-
-function readJson<T>(key: string, fallback: T): T {
-  if (typeof globalThis === 'undefined') return fallback;
-  const storage = (globalThis as {
-    localStorage?: { getItem: (storageKey: string) => string | null };
-  }).localStorage;
-  if (!storage) return fallback;
-  try {
-    const value = storage.getItem(key);
-    if (!value) return fallback;
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
-}
-
 export function useTeamsQuery(): { teams: TeamInfo[]; loading: boolean; error: string | null } {
+  const provider = useDataProvider();
   const [teams, setTeams] = useState<TeamInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      setTeams(readJson<TeamInfo[]>(TEAMS_KEY, []));
-      setError(null);
-    } catch {
-      setError('Failed to load teams');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    let mounted = true;
+    provider
+      .getTeams()
+      .then((result) => {
+        if (mounted) {
+          setTeams(result);
+          setError(null);
+        }
+      })
+      .catch(() => {
+        if (mounted) setError('Failed to load teams');
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => { mounted = false; };
+  }, [provider]);
 
   return { teams, loading, error };
 }
 
 export function usePlayersQuery(teamId: string): { players: PlayerInfo[]; loading: boolean; error: string | null } {
+  const provider = useDataProvider();
+  const [players, setPlayers] = useState<PlayerInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const players = useMemo(() => {
-    if (!teamId) return [];
-    try {
-      const byTeam = readJson<StoredPlayers>(PLAYERS_KEY, {});
-      if (byTeam[teamId]?.length) return byTeam[teamId];
-      return makePlayers(teamId, 11).map((player) => ({
-        id: player.id,
-        name: player.name,
-        role: player.role,
-      }));
-    } catch {
-      return [];
-    }
-  }, [teamId]);
-
   useEffect(() => {
-    try {
-      setError(null);
-    } catch {
-      setError('Failed to load players');
-    } finally {
+    if (!teamId) {
+      setPlayers([]);
       setLoading(false);
+      return;
     }
-  }, [teamId]);
+
+    let mounted = true;
+    provider
+      .getPlayers(teamId)
+      .then((result) => {
+        if (mounted) {
+          setPlayers(result);
+          setError(null);
+        }
+      })
+      .catch(() => {
+        if (mounted) setError('Failed to load players');
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => { mounted = false; };
+  }, [provider, teamId]);
 
   return { players, loading, error };
 }
@@ -100,23 +79,32 @@ export function useTournamentQuery(tournamentId: string): {
   notFound: boolean;
   error: string | null;
 } {
+  const provider = useDataProvider();
   const [tournament, setTournament] = useState<TournamentInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      const tournaments = readJson<TournamentInfo[]>(TOURNAMENTS_KEY, []);
-      const found = tournaments.find((item) => item.id === tournamentId) ?? null;
-      setTournament(found);
-      setError(null);
-    } catch {
-      setError('Failed to load tournament');
-      setTournament(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [tournamentId]);
+    let mounted = true;
+    provider
+      .getTournament(tournamentId)
+      .then((result) => {
+        if (mounted) {
+          setTournament(result);
+          setError(null);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setError('Failed to load tournament');
+          setTournament(null);
+        }
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => { mounted = false; };
+  }, [provider, tournamentId]);
 
   return {
     tournament,
@@ -131,22 +119,32 @@ export function useTournamentMatchesQuery(tournamentId: string): {
   loading: boolean;
   error: string | null;
 } {
+  const provider = useDataProvider();
   const [matches, setMatches] = useState<FirestoreMatchDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      const byTournament = readJson<Record<string, FirestoreMatchDoc[]>>(TOURNAMENT_MATCHES_KEY, {});
-      setMatches(byTournament[tournamentId] ?? []);
-      setError(null);
-    } catch {
-      setError('Failed to load matches');
-      setMatches([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [tournamentId]);
+    let mounted = true;
+    provider
+      .getTournamentMatches(tournamentId)
+      .then((result) => {
+        if (mounted) {
+          setMatches(result);
+          setError(null);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setError('Failed to load matches');
+          setMatches([]);
+        }
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => { mounted = false; };
+  }, [provider, tournamentId]);
 
   return { matches, loading, error };
 }
@@ -156,21 +154,32 @@ export function useTournamentsQuery(): {
   loading: boolean;
   error: string | null;
 } {
+  const provider = useDataProvider();
   const [tournaments, setTournaments] = useState<TournamentDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      setTournaments(readJson<TournamentDoc[]>(TOURNAMENTS_KEY, []));
-      setError(null);
-    } catch {
-      setError('Failed to load tournaments');
-      setTournaments([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    let mounted = true;
+    provider
+      .getTournaments()
+      .then((result) => {
+        if (mounted) {
+          setTournaments(result);
+          setError(null);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setError('Failed to load tournaments');
+          setTournaments([]);
+        }
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => { mounted = false; };
+  }, [provider]);
 
   return { tournaments, loading, error };
 }

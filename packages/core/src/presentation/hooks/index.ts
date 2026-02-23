@@ -17,3 +17,5 @@ export {
   type TournamentInfo,
   type TournamentDoc,
 } from './useDataQueries';
+
+export { DataProviderContext, useDataProvider } from '../DataProviderContext';

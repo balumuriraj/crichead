@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { Colors, Spacing, Typography, BorderRadius } from '@crichead/ui/mobile';
-import type { PlayerInfo } from '../../types/scoring';
+import type { PlayerInfo } from '@crichead/core';
 
 export interface PlayerPickerModalProps {
   visible: boolean;

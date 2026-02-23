@@ -35,6 +35,9 @@ export * from './application/ports';
 // Application — State Store (zustand — framework-agnostic)
 export * as EventStore from './application/store';
 
+// Infrastructure — Default Adapters
+export { createLocalStorageDataProvider } from './infrastructure/services/LocalStorageDataProvider';
+
 // Shared — Utilities (formatBallDisplay, splitBallsIntoOvers, etc.)
 export * from './shared/utils';
 

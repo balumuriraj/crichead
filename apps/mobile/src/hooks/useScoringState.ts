@@ -16,7 +16,8 @@ import {
   generateLocalId,
   saveLocalMatch,
 } from '../utils/localMatchStore';
-import type { TabKey, PickerMode, PlayerInfo } from '../types/scoring';
+import type { TabKey } from '../types/scoring';
+import type { PickerMode, PlayerInfo } from '@crichead/core';
 import { createLocalMatchRepository } from '../repositories/localMatchRepository';
 import { useScoringUiState } from './scoring/useScoringUiState';
 import { useOverCompletionFlow } from './scoring/useOverCompletionFlow';
