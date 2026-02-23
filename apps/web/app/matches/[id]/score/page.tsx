@@ -9,6 +9,10 @@ import {
   EventSchema,
   type ExtraTypeCode,
 } from '@crichead/core';
+import {
+  createWebLocalMatchRepository,
+  loadWebLocalMatch,
+} from './localMatchStore';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,6 +41,8 @@ export default function ScorePage() {
   const params = useParams();
   const matchId = typeof params.id === 'string' ? params.id : 'local';
 
+  const persistedMatch = useMemo(() => loadWebLocalMatch(matchId), [matchId]);
+
   const match: any = useMemo(() => ({
     id: matchId,
     status: 'live',
@@ -51,6 +57,14 @@ export default function ScorePage() {
   
   const loading = false;
   const error: any = null;
+
+  const repository = useMemo(
+    () => createWebLocalMatchRepository({
+      matchId,
+      getConfig: () => match,
+    }),
+    [match, matchId]
+  );
 
   // ---- ScoringSession from core ----
   const {
@@ -71,10 +85,15 @@ export default function ScorePage() {
   } = useScoringSession({
     matchId: matchId || '',
     config: match,
+    repository,
     match,
     isLiveMode: true,
-    localCurrentInningsIndex: 0,
-    localFirstInningsRuns: null,
+    localCurrentInningsIndex: persistedMatch?.currentInningsIndex ?? 0,
+    localFirstInningsRuns: persistedMatch?.firstInningsRuns ?? null,
+    initialBalls: persistedMatch?.balls,
+    initialStrikerId: persistedMatch?.strikerId ?? null,
+    initialNonStrikerId: persistedMatch?.nonStrikerId ?? null,
+    initialBowlerId: persistedMatch?.bowlerId ?? null,
   });
 
 

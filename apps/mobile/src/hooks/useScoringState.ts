@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { type ExtraType } from '@crichead/ui/mobile';
@@ -8,16 +8,19 @@ import {
 import {
   EventSchema,
   EventScoring,
-  migrateBallToEvent,
+  type MatchRepository,
   type ExtraTypeCode,
 } from '@crichead/core';
 import type { QuickMatchConfig } from '../types/QuickMatchConfig';
 import {
   generateLocalId,
   saveLocalMatch,
-  loadLocalMatch,
 } from '../utils/localMatchStore';
 import type { TabKey, PickerMode, PlayerInfo } from '../types/scoring';
+import { createLocalMatchRepository } from '../repositories/localMatchRepository';
+import { useScoringUiState } from './scoring/useScoringUiState';
+import { useOverCompletionFlow } from './scoring/useOverCompletionFlow';
+import { useLocalMatchPersistence } from './scoring/useLocalMatchPersistence';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -108,20 +111,30 @@ export function useScoringState({
 
   // ---- Local state ----
   const [resolvedConfig, setResolvedConfig] = useState<QuickMatchConfig | undefined>(config);
-  const [localLoading, setLocalLoading] = useState(!!initialLocalMatchId);
 
   // ---- Tab/UI state ----
-  const [activeTab, setActiveTab] = useState<TabKey>('players');
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [expandedSection, setExpandedSection] = useState<string | null>('Match Settings');
-  const [showOverCompleteModal, setShowOverCompleteModal] = useState(false);
-  const [isAwaitingNextOverConfirmation, setIsAwaitingNextOverConfirmation] = useState(false);
+  const {
+    activeTab,
+    setActiveTab,
+    showSettingsModal,
+    setShowSettingsModal,
+    expandedSection,
+    setExpandedSection,
+  } = useScoringUiState();
 
   const isLiveMode = false;
 
   // ---- Stable refs ----
   const localMatchIdRef = useRef<string>(initialLocalMatchId ?? generateLocalId());
   const isMatchEndedRef = useRef<boolean>(false);
+  const resolvedConfigRef = useRef<QuickMatchConfig | undefined>(resolvedConfig);
+  resolvedConfigRef.current = resolvedConfig;
+  const repositoryRef = useRef<MatchRepository>(
+    createLocalMatchRepository({
+      matchId: matchId ?? localMatchIdRef.current,
+      getConfig: () => resolvedConfigRef.current,
+    })
+  );
 
   // ---- Core session (ScoringSession orchestration) ----
   const {
@@ -145,35 +158,20 @@ export function useScoringState({
   } = useScoringSession({
     matchId: matchId ?? localMatchIdRef.current,
     config: resolvedConfig ?? null,
+    repository: repositoryRef.current,
     match: null,
     isLiveMode,
     localCurrentInningsIndex: 0,
     localFirstInningsRuns: null,
   });
 
-  // ---- Load from AsyncStorage when resuming a local match ----
-  useEffect(() => {
-    if (!initialLocalMatchId) return;
-    loadLocalMatch(initialLocalMatchId).then((record) => {
-      if (record) {
-        setResolvedConfig(record.config as QuickMatchConfig);
-        const loadedBalls = (record.balls as any[]).map((b) =>
-          b.deliveryType ? b : migrateBallToEvent(b, record.id, String(record.currentInningsIndex || 0))
-        );
-
-        session.setMatchId(record.id ?? localMatchIdRef.current);
-        session.setCurrentInningsIndex(record.currentInningsIndex ?? 0);
-        session.setFirstInningsRuns(record.firstInningsRuns ?? null);
-        session.setBalls(loadedBalls);
-        session.setPlayers(
-          record.strikerId ?? null,
-          record.nonStrikerId ?? null,
-          record.bowlerId ?? null
-        );
-      }
-      setLocalLoading(false);
-    });
-  }, [initialLocalMatchId, session]);
+  const { localLoading } = useLocalMatchPersistence({
+    initialLocalMatchId,
+    localMatchId: localMatchIdRef.current,
+    session,
+    setResolvedConfig,
+    isMatchEndedRef,
+  });
 
   const {
     stats,
@@ -208,7 +206,23 @@ export function useScoringState({
   const batsmenStatsMap = stats.batterStats;
   const bowlerStatsMap = stats.bowlerStats;
 
-  const isOverCompleteWaiting = isAwaitingNextOverConfirmation && !showOverCompleteModal;
+  const {
+    showOverCompleteModal,
+    setShowOverCompleteModal,
+    isOverCompleteWaiting,
+    handleStartNextOver,
+    resetOverCompletionFlow,
+  } = useOverCompletionFlow({
+    ballsLength: balls.length,
+    currentOver: stats.currentOver,
+    currentBall: stats.currentBall,
+    isMatchFinished,
+    pickerMode,
+    sessionSetPickerMode,
+    strikerId,
+    nonStrikerId,
+    bowlerId,
+  });
 
   // If we are waiting for an over completion action (modal is up, or user selected "Edit This Over"),
   // do not lock the UI into the "Innings Complete" pad yet so they can undo or review.
@@ -230,103 +244,6 @@ export function useScoringState({
     pickerMode === 'striker' ? 'Select Striker' :
     pickerMode === 'nonStriker' ? 'Select Non-Striker' :
     pickerMode === 'bowler' ? 'Select Bowler' : '';
-
-  // ---- Detect over completion for modal prompt ----
-  const prevBallsLenRef = useRef(balls.length);
-  const prevOverRef = useRef(stats.currentOver);
-
-  useEffect(() => {
-    const prevLen = prevBallsLenRef.current;
-
-    if (balls.length <= prevLen) {
-      prevBallsLenRef.current = balls.length;
-      prevOverRef.current = stats.currentOver;
-      return;
-    }
-
-    const prevOver = prevOverRef.current;
-
-    prevBallsLenRef.current = balls.length;
-    prevOverRef.current = stats.currentOver;
-
-    const overChanged = stats.currentOver > prevOver;
-
-    if (overChanged) {
-      // Modal-first flow: pause picker prompts until user confirms next over.
-      if (pickerMode !== null) {
-        sessionSetPickerMode(null);
-      }
-      setIsAwaitingNextOverConfirmation(true);
-      setShowOverCompleteModal(true);
-      return;
-    }
-
-    if (stats.currentBall > 0) {
-      setIsAwaitingNextOverConfirmation(false);
-    }
-  }, [balls.length, pickerMode, sessionSetPickerMode, stats.currentOver, stats.currentBall]);
-
-  const handleStartNextOver = useCallback(() => {
-    sessionSetPickerMode(null);
-
-    setIsAwaitingNextOverConfirmation(false);
-    setShowOverCompleteModal(false);
-  }, [sessionSetPickerMode]);
-
-  // ---- Auto-show OverCompleteModal when match finishes ----
-  const prevMatchFinishedRef = useRef(false);
-  useEffect(() => {
-    if (isMatchFinished && !prevMatchFinishedRef.current) {
-      setShowOverCompleteModal(true);
-    }
-    prevMatchFinishedRef.current = isMatchFinished;
-  }, [isMatchFinished]);
-
-  // Clear stale over-wait lock once next-over players are fully selected
-  useEffect(() => {
-    if (
-      isAwaitingNextOverConfirmation &&
-      !showOverCompleteModal &&
-      strikerId !== null &&
-      nonStrikerId !== null &&
-      bowlerId !== null
-    ) {
-      setIsAwaitingNextOverConfirmation(false);
-    }
-  }, [
-    isAwaitingNextOverConfirmation,
-    showOverCompleteModal,
-    strikerId,
-    nonStrikerId,
-    bowlerId,
-  ]);
-
-  // ---- Persist local match state to AsyncStorage ----
-  useEffect(() => {
-    if (isLiveMode || !resolvedConfig || isMatchEndedRef.current) return;
-    saveLocalMatch({
-      id: localMatchIdRef.current,
-      config: resolvedConfig,
-      balls,
-      strikerId,
-      nonStrikerId,
-      bowlerId,
-      status: balls.length > 0 || currentInningsIndex > 0 ? 'live' : 'upcoming',
-      currentInningsIndex,
-      firstInningsRuns,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    });
-  }, [
-    isLiveMode,
-    resolvedConfig,
-    balls,
-    strikerId,
-    nonStrikerId,
-    bowlerId,
-    currentInningsIndex,
-    firstInningsRuns,
-  ]);
 
   // ---- Handlers ----
 
@@ -399,19 +316,17 @@ export function useScoringState({
           onPress: async () => {
             if (currentInningsIndex === 0) {
               session.startNextInnings(stats.totalRuns);
-              setIsAwaitingNextOverConfirmation(false);
-              setShowOverCompleteModal(false);
+              resetOverCompletionFlow();
             } else {
               Alert.alert('Match Ended', 'The local match is over.');
-              setIsAwaitingNextOverConfirmation(false);
-              setShowOverCompleteModal(false);
+              resetOverCompletionFlow();
               session.setPlayers(strikerId, nonStrikerId, null);
             }
           }
         }
       ]
     );
-  }, [currentInningsIndex, nonStrikerId, session, stats.totalRuns, strikerId]);
+  }, [currentInningsIndex, nonStrikerId, resetOverCompletionFlow, session, stats.totalRuns, strikerId]);
 
   const handleEndMatch = useCallback(async () => {
     Alert.alert(

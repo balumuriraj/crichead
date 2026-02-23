@@ -18,6 +18,7 @@ import {
   createPenaltyEvent,
 } from './actions/actions';
 import { getMatchStatus, type DerivedMatchState, type ScoringEngineConfig } from '../domain/scoring/derivedState';
+import type { MatchRepository } from './ports/MatchRepository';
 
 // ---- Session Configuration ----
 
@@ -25,6 +26,7 @@ export interface ScoringSessionConfig {
   matchId: string;
   currentInningsIndex: number;
   engineConfig: ScoringEngineConfig;
+  repository: MatchRepository;
 
   /** Initial balls to seed the session (e.g. from local storage or Firestore snapshot) */
   initialBalls?: BallEvent[];
@@ -64,6 +66,7 @@ export class ScoringSession {
   private firstInningsRuns: number | null;
   private matchId: string;
   private engineConfig: ScoringEngineConfig;
+  private repository: MatchRepository;
 
   // Over-change / wicket detection tracking
   private prevOver: number = 0;
@@ -80,6 +83,7 @@ export class ScoringSession {
     this.matchId = config.matchId;
     this.currentInningsIndex = config.currentInningsIndex;
     this.engineConfig = config.engineConfig;
+    this.repository = config.repository;
     this.balls = config.initialBalls ? [...config.initialBalls] : [];
     this.strikerId = config.initialStrikerId ?? null;
     this.nonStrikerId = config.initialNonStrikerId ?? null;
@@ -169,6 +173,12 @@ export class ScoringSession {
     this.nonStrikerId = nonStrikerId;
     this.bowlerId = bowlerId;
     this.emitChange();
+
+    void this.repository.updateMatchState(this.matchId, {
+      strikerId: this.strikerId,
+      nonStrikerId: this.nonStrikerId,
+      bowlerId: this.bowlerId,
+    });
   }
 
   setPickerMode(mode: PickerMode): void {
@@ -191,6 +201,10 @@ export class ScoringSession {
 
     this.currentInningsIndex = index;
     this.emitChange();
+
+    void this.repository.updateMatchState(this.matchId, {
+      currentInningsIndex: this.currentInningsIndex,
+    });
   }
 
   setFirstInningsRuns(runs: number | null): void {
@@ -200,6 +214,10 @@ export class ScoringSession {
 
     this.firstInningsRuns = runs;
     this.emitChange();
+
+    void this.repository.updateMatchState(this.matchId, {
+      firstInningsRuns: this.firstInningsRuns,
+    });
   }
 
   // ---- Core Scoring Operations ----
@@ -215,18 +233,19 @@ export class ScoringSession {
   }
 
   /**
-   * Add a ball to the local event stream and detect over-change / wicket transitions.
-   * Returns the ball so the caller can sync it remotely.
+   * Add a ball to the local event stream and persist via MatchRepository.
    */
   addBall(ball: BallEvent): BallEvent {
     this.balls = [...this.balls, ball];
     this.detectTransitions();
     this.emitChange();
+
+    void this.repository.addBall(ball);
     return ball;
   }
 
   /**
-   * Remove the last ball. Returns the removed ball for remote rollback.
+   * Remove the last ball and persist undo via MatchRepository.
    * Also restores striker/nonStriker to who they were at the start of the undone ball.
    */
   undoBall(): BallEvent | null {
@@ -245,6 +264,7 @@ export class ScoringSession {
     this.prevBallsLen = this.balls.length;
 
     this.emitChange();
+    void this.repository.undoLastBall();
     return removed;
   }
 
@@ -356,6 +376,15 @@ export class ScoringSession {
     this.prevBallsLen = 0;
 
     this.emitChange();
+
+    void this.repository.endCurrentInnings();
+    void this.repository.updateMatchState(this.matchId, {
+      firstInningsRuns: this.firstInningsRuns,
+      currentInningsIndex: this.currentInningsIndex,
+      strikerId: this.strikerId,
+      nonStrikerId: this.nonStrikerId,
+      bowlerId: this.bowlerId,
+    });
   }
 
   // ---- Over-Change / Wicket Detection (synchronous state machine) ----

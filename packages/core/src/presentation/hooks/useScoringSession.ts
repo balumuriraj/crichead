@@ -11,6 +11,7 @@ import type { ExtraTypeCode, PickerMode } from '../../application/types';
 import type { ScoringConfig } from '../../domain/types/ScoringConfig';
 import type { FirestoreMatchDoc } from '../../domain/types/Firestore';
 import { ScoringSession, type ScoringSessionConfig } from '../../application/ScoringSession';
+import type { MatchRepository } from '../../application/ports/MatchRepository';
 import { useScoringEngine } from './useScoringEngine';
 
 // ---- Hook Props ----
@@ -18,6 +19,7 @@ import { useScoringEngine } from './useScoringEngine';
 export interface UseScoringSessionProps {
   matchId: string;
   config: ScoringConfig | null;
+  repository: MatchRepository;
   match?: FirestoreMatchDoc | null;
   isLiveMode: boolean;
   localCurrentInningsIndex: number;
@@ -71,6 +73,7 @@ export function useScoringSession(props: UseScoringSessionProps): UseScoringSess
   const {
     matchId,
     config,
+    repository,
     match,
     isLiveMode,
     localCurrentInningsIndex,
@@ -88,6 +91,7 @@ export function useScoringSession(props: UseScoringSessionProps): UseScoringSess
       matchId,
       currentInningsIndex: localCurrentInningsIndex,
       engineConfig: config ?? { oversPerInnings: 20 },
+      repository,
       initialBalls,
       initialStrikerId,
       initialNonStrikerId,
