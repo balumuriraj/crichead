@@ -38,6 +38,9 @@ export interface ScoringSessionConfig {
 
   /** First innings total for chasing scenarios */
   firstInningsRuns?: number | null;
+
+  /** Called when a repository persistence operation fails */
+  onPersistError?: (error: unknown) => void;
 }
 
 // ---- Session Snapshot (immutable state for UI) ----
@@ -67,6 +70,7 @@ export class ScoringSession {
   private matchId: string;
   private engineConfig: ScoringEngineConfig;
   private repository: MatchRepository;
+  private onPersistError: ((error: unknown) => void) | undefined;
 
   // Over-change / wicket detection tracking
   private prevOver: number = 0;
@@ -84,6 +88,7 @@ export class ScoringSession {
     this.currentInningsIndex = config.currentInningsIndex;
     this.engineConfig = config.engineConfig;
     this.repository = config.repository;
+    this.onPersistError = config.onPersistError;
     this.balls = config.initialBalls ? [...config.initialBalls] : [];
     this.strikerId = config.initialStrikerId ?? null;
     this.nonStrikerId = config.initialNonStrikerId ?? null;
@@ -108,6 +113,15 @@ export class ScoringSession {
   private emitChange(): void {
     this.snapshotCache = null;
     this.listeners.forEach((l) => l());
+  }
+
+  /** Fire an async repository operation with error handling. */
+  private persist(op: Promise<void>): void {
+    op.catch((err) => {
+      if (this.onPersistError) {
+        this.onPersistError(err);
+      }
+    });
   }
 
   // ---- Computed State ----
@@ -174,11 +188,11 @@ export class ScoringSession {
     this.bowlerId = bowlerId;
     this.emitChange();
 
-    void this.repository.updateMatchState(this.matchId, {
+    this.persist(this.repository.updateMatchState(this.matchId, {
       strikerId: this.strikerId,
       nonStrikerId: this.nonStrikerId,
       bowlerId: this.bowlerId,
-    });
+    }));
   }
 
   setPickerMode(mode: PickerMode): void {
@@ -202,9 +216,9 @@ export class ScoringSession {
     this.currentInningsIndex = index;
     this.emitChange();
 
-    void this.repository.updateMatchState(this.matchId, {
+    this.persist(this.repository.updateMatchState(this.matchId, {
       currentInningsIndex: this.currentInningsIndex,
-    });
+    }));
   }
 
   setFirstInningsRuns(runs: number | null): void {
@@ -215,9 +229,9 @@ export class ScoringSession {
     this.firstInningsRuns = runs;
     this.emitChange();
 
-    void this.repository.updateMatchState(this.matchId, {
+    this.persist(this.repository.updateMatchState(this.matchId, {
       firstInningsRuns: this.firstInningsRuns,
-    });
+    }));
   }
 
   // ---- Core Scoring Operations ----
@@ -240,7 +254,7 @@ export class ScoringSession {
     this.detectTransitions();
     this.emitChange();
 
-    void this.repository.addBall(ball);
+    this.persist(this.repository.addBall(ball));
     return ball;
   }
 
@@ -264,7 +278,7 @@ export class ScoringSession {
     this.prevBallsLen = this.balls.length;
 
     this.emitChange();
-    void this.repository.undoLastBall();
+    this.persist(this.repository.undoLastBall());
     return removed;
   }
 
@@ -377,14 +391,14 @@ export class ScoringSession {
 
     this.emitChange();
 
-    void this.repository.endCurrentInnings();
-    void this.repository.updateMatchState(this.matchId, {
+    this.persist(this.repository.endCurrentInnings());
+    this.persist(this.repository.updateMatchState(this.matchId, {
       firstInningsRuns: this.firstInningsRuns,
       currentInningsIndex: this.currentInningsIndex,
       strikerId: this.strikerId,
       nonStrikerId: this.nonStrikerId,
       bowlerId: this.bowlerId,
-    });
+    }));
   }
 
   // ---- Over-Change / Wicket Detection (synchronous state machine) ----

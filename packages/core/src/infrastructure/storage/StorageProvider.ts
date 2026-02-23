@@ -3,14 +3,3 @@ export interface StorageProvider {
   setItem: (key: string, value: string) => Promise<void>;
   removeItem: (key: string) => Promise<void>;
 }
-
-let provider: StorageProvider | null = null;
-
-export function setStorageProvider(p: StorageProvider) {
-  provider = p;
-}
-
-export function getStorageProvider(): StorageProvider {
-  if (!provider) throw new Error("StorageProvider not initialized");
-  return provider;
-}

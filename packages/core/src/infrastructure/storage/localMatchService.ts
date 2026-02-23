@@ -1,4 +1,3 @@
-import { getStorageProvider } from './StorageProvider';
 import type { StorageProvider } from './StorageProvider';
 import type { BallEvent } from '../../domain/schema/ballEvent';
 import type { ScoringConfig } from '../../domain/types/ScoringConfig';
@@ -56,22 +55,6 @@ export function createLocalMatchService(storage: StorageProvider): LocalMatchSer
   };
 }
 
-function getDefaultLocalMatchService(): LocalMatchService {
-  return createLocalMatchService(getStorageProvider());
-}
-
 export function generateLocalId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
-}
-
-export async function saveLocalMatchCore(record: LocalMatchRecord): Promise<void> {
-  await getDefaultLocalMatchService().save(record);
-}
-
-export async function loadLocalMatchCore(id: string): Promise<LocalMatchRecord | null> {
-  return getDefaultLocalMatchService().load(id);
-}
-
-export async function listLocalMatchesCore(): Promise<LocalMatchRecord[]> {
-  return getDefaultLocalMatchService().list();
 }
