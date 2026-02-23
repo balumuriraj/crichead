@@ -1,37 +1,23 @@
 'use client';
 
-import { useMemo, useCallback, useRef, useEffect, useState } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { useScoringSession } from '@crichead/core/hooks';
 import {
-  formatBallDisplay,
   splitBallsIntoOvers,
-  EventSchema,
   type ExtraTypeCode,
 } from '@crichead/core';
+import {
+  ScoreButton,
+  ExtraButton,
+  WicketButton,
+  OverProgress,
+  type ExtraType,
+} from '@crichead/ui/web';
 import {
   createWebLocalMatchRepository,
   loadWebLocalMatch,
 } from './localMatchStore';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-type WebExtraType = 'wd' | 'nb' | 'b' | 'lb';
-
-// ---------------------------------------------------------------------------
-// Ball color helper (Tailwind classes — web only)
-// ---------------------------------------------------------------------------
-
-function getBallColor(ball: EventSchema.BallEvent): string {
-  if (ball.wicket) return 'bg-red-500 text-white';
-  if (ball.runs.bat === 4 && ball.runs.extra === 0) return 'bg-[#00FF41] text-[#0F172A]';
-  if (ball.runs.bat === 6 && ball.runs.extra === 0) return 'bg-yellow-400 text-[#0F172A]';
-  if (ball.runs.extra > 0) return 'bg-amber-600 text-white';
-  if (ball.runs.bat === 0 && ball.runs.extra === 0 && ball.runs.penalty === 0) return 'bg-[#334155] text-gray-400';
-  return 'bg-[#334155] text-white';
-}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -107,11 +93,9 @@ export default function ScorePage() {
     [sessionHandleScore]
   );
 
-  const extraMap: Record<WebExtraType, ExtraTypeCode> = { wd: 'WD', nb: 'NB', b: 'B', lb: 'LB' };
-
   const handleExtra = useCallback(
-    (type: WebExtraType) => {
-      sessionHandleExtra(extraMap[type]);
+    (type: ExtraType) => {
+      sessionHandleExtra(type as ExtraTypeCode);
     },
     [sessionHandleExtra]
   );
@@ -310,19 +294,7 @@ export default function ScorePage() {
             <h2 className="text-xs font-bold text-gray-500 tracking-widest mb-4">
               THIS OVER ({stats.currentBall}/6)
             </h2>
-            <div className="flex gap-1.5 flex-wrap">
-              {currentOverBalls.map((ball, i) => (
-                <div
-                  key={i}
-                  className={`w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold ${getBallColor(ball)}`}
-                >
-                  {formatBallDisplay(ball)}
-                </div>
-              ))}
-              {currentOverBalls.length === 0 && (
-                <p className="text-sm text-gray-500 italic">New over</p>
-              )}
-            </div>
+            <OverProgress balls={currentOverBalls} />
           </div>
 
           {/* Over by Over */}
@@ -337,16 +309,7 @@ export default function ScorePage() {
                   return (
                     <div key={overIdx} className="flex items-center gap-3">
                       <span className="text-xs font-bold text-gray-600 w-10 shrink-0">Ov {overIdx + 1}</span>
-                      <div className="flex gap-1.5 flex-1 flex-wrap">
-                        {over.map((ball, ballIdx) => (
-                          <div
-                            key={ballIdx}
-                            className={`w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold ${getBallColor(ball)}`}
-                          >
-                            {formatBallDisplay(ball)}
-                          </div>
-                        ))}
-                      </div>
+                      <OverProgress balls={over} className="flex-1" />
                       <span className="text-sm font-bold text-white w-8 text-right shrink-0">{overRuns}</span>
                     </div>
                   );
@@ -391,20 +354,12 @@ export default function ScorePage() {
             <h2 className="text-xs font-bold text-gray-500 tracking-widest mb-3">SCORE RUNS</h2>
             <div className="grid grid-cols-4 gap-2">
               {[0, 1, 2, 3, 4, 5, 6].map((runs) => (
-                <button
+                <ScoreButton
                   key={runs}
-                  onClick={() => handleScore(runs)}
+                  value={runs}
+                  onPress={handleScore}
                   disabled={inputDisabled}
-                  className={`h-14 rounded-xl font-bold text-lg transition-all duration-150 active:scale-90 hover:brightness-110 disabled:opacity-30 disabled:cursor-not-allowed ${
-                    runs === 4 || runs === 6
-                      ? 'bg-[#00FF41] text-[#0F172A]'
-                      : runs === 0
-                        ? 'bg-[#334155] text-gray-400 hover:text-white'
-                        : 'bg-[#334155] text-white'
-                  }`}
-                >
-                  {runs}
-                </button>
+                />
               ))}
             </div>
           </div>
@@ -413,28 +368,20 @@ export default function ScorePage() {
           <div className="bg-[#1E293B] rounded-2xl p-5">
             <h2 className="text-xs font-bold text-gray-500 tracking-widest mb-3">EXTRAS</h2>
             <div className="grid grid-cols-4 gap-2">
-              {(['wd', 'nb', 'b', 'lb'] as WebExtraType[]).map((type) => (
-                <button
+              {(['WD', 'NB', 'B', 'LB'] as ExtraType[]).map((type) => (
+                <ExtraButton
                   key={type}
-                  onClick={() => handleExtra(type)}
+                  type={type}
+                  onPress={handleExtra}
                   disabled={inputDisabled}
-                  className="h-11 rounded-xl bg-amber-600/15 text-amber-400 border border-amber-600/30 font-bold text-sm hover:bg-amber-600/25 transition-all duration-150 active:scale-90 disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  {type.toUpperCase()}
-                </button>
+                />
               ))}
             </div>
           </div>
 
           {/* Wicket + Penalty */}
           <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={handleWicket}
-              disabled={inputDisabled}
-              className="h-14 rounded-xl bg-red-500/15 text-red-400 border border-red-500/30 font-bold text-base hover:bg-red-500/25 transition-all duration-150 active:scale-90 disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              WICKET
-            </button>
+            <WicketButton onPress={handleWicket} disabled={inputDisabled} />
             <button
               onClick={handlePenalty}
               disabled={inputDisabled}

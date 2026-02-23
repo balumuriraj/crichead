@@ -11,6 +11,10 @@
     "./mobile": {
       "types": "./dist/mobile/index.d.ts",
       "default": "./dist/mobile/index.js"
+    },
+    "./web": {
+      "types": "./dist/web/index.d.ts",
+      "default": "./dist/web/index.js"
     }
   },
   "scripts": {
