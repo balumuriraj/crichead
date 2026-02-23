@@ -214,7 +214,12 @@ export default function ScoringScreen({
       />
 
       {(() => {
-        const bowlerStats = scoring.bowlerId ? scoring.bowlerStatsMap[scoring.bowlerId] : null;
+        const completedOverBowlerId =
+          scoring.completedOverBalls.length > 0
+            ? scoring.completedOverBalls[scoring.completedOverBalls.length - 1]!.bowlerId
+            : scoring.bowlerId;
+
+        const bowlerStats = completedOverBowlerId ? scoring.bowlerStatsMap[completedOverBowlerId] : null;
         const validBalls = bowlerStats?.validBalls ?? 0;
         const bOvers = `${Math.floor(validBalls / 6)}.${validBalls % 6}`;
         const bMaidens = 0; // Not tracked in local stats currently
@@ -226,7 +231,7 @@ export default function ScoringScreen({
             visible={scoring.showOverCompleteModal}
             totalOvers={scoring.stats.currentOver}
             scoreString={`${scoring.stats.totalRuns}/${scoring.stats.totalWickets}`}
-            bowlerName={scoring.getPlayerName(scoring.bowlerId)}
+            bowlerName={scoring.getPlayerName(completedOverBowlerId)}
             bowlerRole="Bowler" // If role is needed, can be passed here
             bowlerFigures={`${bOvers}-${bMaidens}-${bRuns}-${bWickets}`}
             balls={scoring.completedOverBalls}

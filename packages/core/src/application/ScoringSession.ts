@@ -73,6 +73,9 @@ export class ScoringSession {
   // Change listener for React integration
   private listeners: Set<() => void> = new Set();
 
+  // Cached snapshot for useSyncExternalStore stability
+  private snapshotCache: ScoringSessionSnapshot | null = null;
+
   constructor(config: ScoringSessionConfig) {
     this.matchId = config.matchId;
     this.currentInningsIndex = config.currentInningsIndex;
@@ -99,6 +102,7 @@ export class ScoringSession {
   };
 
   private emitChange(): void {
+    this.snapshotCache = null;
     this.listeners.forEach((l) => l());
   }
 
@@ -112,7 +116,11 @@ export class ScoringSession {
   }
 
   getSnapshot(): ScoringSessionSnapshot {
-    return {
+    if (this.snapshotCache) {
+      return this.snapshotCache;
+    }
+
+    this.snapshotCache = {
       balls: this.balls,
       strikerId: this.strikerId,
       nonStrikerId: this.nonStrikerId,
@@ -122,11 +130,24 @@ export class ScoringSession {
       firstInningsRuns: this.firstInningsRuns,
       stats: this.computeStats(),
     };
+
+    return this.snapshotCache;
   }
 
   // ---- State Setters (for external sync, e.g. Firestore snapshot) ----
 
   setBalls(balls: BallEvent[]): void {
+    if (this.balls === balls) {
+      return;
+    }
+
+    if (
+      this.balls.length === balls.length &&
+      this.balls.every((ball, index) => ball === balls[index])
+    ) {
+      return;
+    }
+
     this.balls = [...balls];
     const stats = this.computeStats();
     this.prevOver = stats.currentOver;
@@ -136,6 +157,14 @@ export class ScoringSession {
   }
 
   setPlayers(strikerId: string | null, nonStrikerId: string | null, bowlerId: string | null): void {
+    if (
+      this.strikerId === strikerId &&
+      this.nonStrikerId === nonStrikerId &&
+      this.bowlerId === bowlerId
+    ) {
+      return;
+    }
+
     this.strikerId = strikerId;
     this.nonStrikerId = nonStrikerId;
     this.bowlerId = bowlerId;
@@ -143,6 +172,10 @@ export class ScoringSession {
   }
 
   setPickerMode(mode: PickerMode): void {
+    if (this.pickerMode === mode) {
+      return;
+    }
+
     this.pickerMode = mode;
     this.emitChange();
   }
@@ -152,11 +185,19 @@ export class ScoringSession {
   }
 
   setCurrentInningsIndex(index: number): void {
+    if (this.currentInningsIndex === index) {
+      return;
+    }
+
     this.currentInningsIndex = index;
     this.emitChange();
   }
 
   setFirstInningsRuns(runs: number | null): void {
+    if (this.firstInningsRuns === runs) {
+      return;
+    }
+
     this.firstInningsRuns = runs;
     this.emitChange();
   }

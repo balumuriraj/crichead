@@ -5,7 +5,7 @@
  * It combines ScoringSession (orchestration) with useScoringEngine (derived stats).
  */
 
-import { useRef, useMemo, useSyncExternalStore, useCallback } from 'react';
+import { useRef, useSyncExternalStore, useCallback } from 'react';
 import type { BallEvent, WicketTypeEvent } from '../../domain/schema/ballEvent';
 import type { ExtraTypeCode, PickerMode } from '../../application/types';
 import type { ScoringConfig } from '../../domain/types/ScoringConfig';

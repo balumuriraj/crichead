@@ -1,18 +1,15 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { type ExtraType } from '@crichead/ui/mobile';
 import {
-  useScoringEngine,
+  useScoringSession,
 } from '@crichead/core/hooks';
 import {
   EventSchema,
   EventScoring,
   migrateBallToEvent,
-  createScoreEvent,
-  createExtraEvent,
-  createWicketEvent,
-  createPenaltyEvent,
+  type ExtraTypeCode,
 } from '@crichead/core';
 import type { QuickMatchConfig } from '../types/QuickMatchConfig';
 import {
@@ -103,31 +100,22 @@ export interface ScoringState {
 // ---------------------------------------------------------------------------
 
 export function useScoringState({
+  matchId,
   config,
   initialLocalMatchId,
 }: UseScoringStateInput): ScoringState {
   const router = useRouter();
 
   // ---- Local state ----
-  const [localBalls, setLocalBalls] = useState<EventSchema.BallEvent[]>([]);
   const [resolvedConfig, setResolvedConfig] = useState<QuickMatchConfig | undefined>(config);
   const [localLoading, setLocalLoading] = useState(!!initialLocalMatchId);
-
-  // ---- Local mode innings state ----
-  const [localCurrentInningsIndex, setLocalCurrentInningsIndex] = useState(0);
-  const [localFirstInningsRuns, setLocalFirstInningsRuns] = useState<number | null>(null);
-
-  // ---- Active player state ----
-  const [strikerId, setStrikerId] = useState<string | null>(null);
-  const [nonStrikerId, setNonStrikerId] = useState<string | null>(null);
-  const [bowlerId, setBowlerId] = useState<string | null>(null);
-  const [pickerMode, setPickerMode] = useState<PickerMode>(null);
 
   // ---- Tab/UI state ----
   const [activeTab, setActiveTab] = useState<TabKey>('players');
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [expandedSection, setExpandedSection] = useState<string | null>('Match Settings');
   const [showOverCompleteModal, setShowOverCompleteModal] = useState(false);
+  const [isAwaitingNextOverConfirmation, setIsAwaitingNextOverConfirmation] = useState(false);
 
   const isLiveMode = false;
 
@@ -135,43 +123,57 @@ export function useScoringState({
   const localMatchIdRef = useRef<string>(initialLocalMatchId ?? generateLocalId());
   const isMatchEndedRef = useRef<boolean>(false);
 
+  // ---- Core session (ScoringSession orchestration) ----
+  const {
+    balls,
+    strikerId,
+    nonStrikerId,
+    bowlerId,
+    pickerMode,
+    currentInningsIndex,
+    firstInningsRuns,
+    engineState,
+    handleScore: sessionHandleScore,
+    handleExtra: sessionHandleExtra,
+    handleWicket: sessionHandleWicket,
+    handlePenalty: sessionHandlePenalty,
+    undoBall: sessionUndoBall,
+    pickPlayer: sessionPickPlayer,
+    swapStrike: sessionSwapStrike,
+    setPickerMode: sessionSetPickerMode,
+    session,
+  } = useScoringSession({
+    matchId: matchId ?? localMatchIdRef.current,
+    config: resolvedConfig ?? null,
+    match: null,
+    isLiveMode,
+    localCurrentInningsIndex: 0,
+    localFirstInningsRuns: null,
+  });
+
   // ---- Load from AsyncStorage when resuming a local match ----
   useEffect(() => {
     if (!initialLocalMatchId) return;
     loadLocalMatch(initialLocalMatchId).then((record) => {
       if (record) {
         setResolvedConfig(record.config as QuickMatchConfig);
-        setLocalBalls((record.balls as any[]).map(b => 
+        const loadedBalls = (record.balls as any[]).map((b) =>
           b.deliveryType ? b : migrateBallToEvent(b, record.id, String(record.currentInningsIndex || 0))
-        ));
-        setStrikerId(record.strikerId);
-        setNonStrikerId(record.nonStrikerId);
-        setBowlerId(record.bowlerId);
-        if (record.currentInningsIndex !== undefined) {
-          setLocalCurrentInningsIndex(record.currentInningsIndex);
-        }
-        if (record.firstInningsRuns !== undefined) {
-          setLocalFirstInningsRuns(record.firstInningsRuns);
-        }
+        );
+
+        session.setMatchId(record.id ?? localMatchIdRef.current);
+        session.setCurrentInningsIndex(record.currentInningsIndex ?? 0);
+        session.setFirstInningsRuns(record.firstInningsRuns ?? null);
+        session.setBalls(loadedBalls);
+        session.setPlayers(
+          record.strikerId ?? null,
+          record.nonStrikerId ?? null,
+          record.bowlerId ?? null
+        );
       }
       setLocalLoading(false);
     });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ---- Derived state via core engine ----
-  const balls = localBalls;
-
-  const engineState = useScoringEngine({
-    balls,
-    config: resolvedConfig ?? null,
-    match: null,
-    isLiveMode,
-    localCurrentInningsIndex,
-    localFirstInningsRuns,
-    strikerId,
-    nonStrikerId,
-    bowlerId,
-  });
+  }, [initialLocalMatchId, session]);
 
   const {
     stats,
@@ -180,8 +182,6 @@ export function useScoringState({
     maxOvers,
     maxWickets,
     matchStatus,
-    currentInningsIndex,
-    firstInningsRuns,
     isChasing,
     allOversCompleted,
     allOut,
@@ -208,9 +208,7 @@ export function useScoringState({
   const batsmenStatsMap = stats.batterStats;
   const bowlerStatsMap = stats.bowlerStats;
 
-  // We consider an over "just completed" if stats.currentBall === 0 and bowlerId === (the bowler of the last ball)
-  const lastBallBowlerIdForInput = balls.length > 0 ? balls[balls.length - 1]!.bowlerId : null;
-  const isOverCompleteWaiting = stats.currentOver > 0 && stats.currentBall === 0 && (bowlerId === null || bowlerId === lastBallBowlerIdForInput);
+  const isOverCompleteWaiting = isAwaitingNextOverConfirmation && !showOverCompleteModal;
 
   // If we are waiting for an over completion action (modal is up, or user selected "Edit This Over"),
   // do not lock the UI into the "Innings Complete" pad yet so they can undo or review.
@@ -233,86 +231,75 @@ export function useScoringState({
     pickerMode === 'nonStriker' ? 'Select Non-Striker' :
     pickerMode === 'bowler' ? 'Select Bowler' : '';
 
-  // ---- Detect over change / wicket for player prompts ----
+  // ---- Detect over completion for modal prompt ----
   const prevBallsLenRef = useRef(balls.length);
   const prevOverRef = useRef(stats.currentOver);
-  const prevWicketsRef = useRef(stats.totalWickets);
-  const strikerIdRef = useRef(strikerId);
-  const nonStrikerIdRef = useRef(nonStrikerId);
-  strikerIdRef.current = strikerId;
-  nonStrikerIdRef.current = nonStrikerId;
-  const cascadeToBowlerRef = useRef(false);
-  const prevInningsCompleteRef = useRef(false);
 
   useEffect(() => {
     const prevLen = prevBallsLenRef.current;
 
-    if (balls.length < prevLen) {
+    if (balls.length <= prevLen) {
       prevBallsLenRef.current = balls.length;
       prevOverRef.current = stats.currentOver;
-      prevWicketsRef.current = stats.totalWickets;
       return;
     }
 
-    if (balls.length === prevLen) return;
-
     const prevOver = prevOverRef.current;
-    const prevWickets = prevWicketsRef.current;
 
     prevBallsLenRef.current = balls.length;
     prevOverRef.current = stats.currentOver;
-    prevWicketsRef.current = stats.totalWickets;
 
     const overChanged = stats.currentOver > prevOver;
-    const wicketFell = stats.totalWickets > prevWickets;
 
-    if (wicketFell && overChanged) {
-      cascadeToBowlerRef.current = true;
-      setStrikerId(null);
-      // Removed setBowlerId(null) here so modal shows correct bowler
-      setTimeout(() => setShowOverCompleteModal(true), 300);
-    } else if (wicketFell) {
-      setStrikerId(null);
-      setTimeout(() => setPickerMode('striker'), 300);
-    } else if (overChanged) {
-      setStrikerId(nonStrikerIdRef.current);
-      setNonStrikerId(strikerIdRef.current);
-      // Removed setBowlerId(null) here so modal shows correct bowler
-      setTimeout(() => setShowOverCompleteModal(true), 300);
+    if (overChanged) {
+      // Modal-first flow: pause picker prompts until user confirms next over.
+      if (pickerMode !== null) {
+        sessionSetPickerMode(null);
+      }
+      setIsAwaitingNextOverConfirmation(true);
+      setShowOverCompleteModal(true);
+      return;
     }
-  }, [balls.length, stats]);
+
+    if (stats.currentBall > 0) {
+      setIsAwaitingNextOverConfirmation(false);
+    }
+  }, [balls.length, pickerMode, sessionSetPickerMode, stats.currentOver, stats.currentBall]);
 
   const handleStartNextOver = useCallback(() => {
-    setShowOverCompleteModal(false);
-    setBowlerId(null); // Clear bowlerId now to force picker and update playersReady
-    setTimeout(() => {
-      if (cascadeToBowlerRef.current) {
-        setPickerMode('striker');
-      } else {
-        setPickerMode('bowler');
-      }
-    }, 300);
-  }, []);
+    sessionSetPickerMode(null);
 
-  // ---- Reset players when innings completes (but NOT when match finishes) ----
-  useEffect(() => {
-    if (scoringDisabled && !prevInningsCompleteRef.current && !isMatchFinished) {
-      setStrikerId(null);
-      setNonStrikerId(null);
-      setBowlerId(null);
-      setPickerMode(null);
-    }
-    prevInningsCompleteRef.current = scoringDisabled;
-  }, [scoringDisabled, isMatchFinished]);
+    setIsAwaitingNextOverConfirmation(false);
+    setShowOverCompleteModal(false);
+  }, [sessionSetPickerMode]);
 
   // ---- Auto-show OverCompleteModal when match finishes ----
   const prevMatchFinishedRef = useRef(false);
   useEffect(() => {
     if (isMatchFinished && !prevMatchFinishedRef.current) {
-      setTimeout(() => setShowOverCompleteModal(true), 300);
+      setShowOverCompleteModal(true);
     }
     prevMatchFinishedRef.current = isMatchFinished;
   }, [isMatchFinished]);
+
+  // Clear stale over-wait lock once next-over players are fully selected
+  useEffect(() => {
+    if (
+      isAwaitingNextOverConfirmation &&
+      !showOverCompleteModal &&
+      strikerId !== null &&
+      nonStrikerId !== null &&
+      bowlerId !== null
+    ) {
+      setIsAwaitingNextOverConfirmation(false);
+    }
+  }, [
+    isAwaitingNextOverConfirmation,
+    showOverCompleteModal,
+    strikerId,
+    nonStrikerId,
+    bowlerId,
+  ]);
 
   // ---- Persist local match state to AsyncStorage ----
   useEffect(() => {
@@ -320,97 +307,55 @@ export function useScoringState({
     saveLocalMatch({
       id: localMatchIdRef.current,
       config: resolvedConfig,
-      balls: localBalls,
+      balls,
       strikerId,
       nonStrikerId,
       bowlerId,
-      status: localBalls.length > 0 || localCurrentInningsIndex > 0 ? 'live' : 'upcoming',
-      currentInningsIndex: localCurrentInningsIndex,
-      firstInningsRuns: localFirstInningsRuns,
+      status: balls.length > 0 || currentInningsIndex > 0 ? 'live' : 'upcoming',
+      currentInningsIndex,
+      firstInningsRuns,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
   }, [
     isLiveMode,
     resolvedConfig,
-    localBalls,
+    balls,
     strikerId,
     nonStrikerId,
     bowlerId,
-    localCurrentInningsIndex,
-    localFirstInningsRuns,
+    currentInningsIndex,
+    firstInningsRuns,
   ]);
 
   // ---- Handlers ----
 
-  const addBall = useCallback(
-    async (ball: EventSchema.BallEvent) => {
-      setLocalBalls((prev) => [...prev, ball]);
-    },
-    []
-  );
-
   const handleScore = useCallback(
     (runs: number) => {
-      if (!strikerId || !bowlerId) return;
-      
-      const newBall = createScoreEvent({
-        matchId: localMatchIdRef.current,
-        inningsId: String(currentInningsIndex),
-        bowlerId,
-        strikerId,
-        nonStrikerId: nonStrikerId || 'unknown',
-      }, runs);
-      
-      addBall(newBall);
-      if (runs % 2 === 1) {
-        const prev = strikerId;
-        setStrikerId(nonStrikerId);
-        setNonStrikerId(prev);
-      }
+      sessionHandleScore(runs);
     },
-    [addBall, strikerId, nonStrikerId, bowlerId, currentInningsIndex]
+    [sessionHandleScore]
   );
 
   const handleExtra = useCallback(
     (type: ExtraType) => {
-      if (!strikerId || !bowlerId) return;
-      const extraMap: Record<string, 'wd' | 'nb' | 'b' | 'lb'> = {
-        WD: 'wd', NB: 'nb', B: 'b', LB: 'lb',
-        wd: 'wd', nb: 'nb', b: 'b', lb: 'lb'
+      const extraMap: Record<string, ExtraTypeCode> = {
+        WD: 'WD', NB: 'NB', B: 'B', LB: 'LB',
+        wd: 'WD', nb: 'NB', b: 'B', lb: 'LB',
       };
-      
-      const mappedType = extraMap[type as string];
 
-      const newBall = createExtraEvent({
-        matchId: localMatchIdRef.current,
-        inningsId: String(currentInningsIndex),
-        bowlerId,
-        strikerId,
-        nonStrikerId: nonStrikerId || 'unknown',
-      }, type as any);
-      
-      addBall(newBall);
+      const mappedType = extraMap[type as string];
+      if (!mappedType) return;
+      sessionHandleExtra(mappedType);
     },
-    [addBall, strikerId, bowlerId, nonStrikerId, currentInningsIndex]
+    [sessionHandleExtra]
   );
 
   const handleWicket = useCallback(() => {
-    if (!strikerId || !bowlerId) return;
-    
-    const newBall = createWicketEvent({
-      matchId: localMatchIdRef.current,
-      inningsId: String(currentInningsIndex),
-      bowlerId,
-      strikerId,
-      nonStrikerId: nonStrikerId || 'unknown',
-    }, strikerId);
-    
-    addBall(newBall);
-  }, [addBall, strikerId, bowlerId, nonStrikerId, currentInningsIndex]);
+    sessionHandleWicket();
+  }, [sessionHandleWicket]);
 
   const handlePenalty = useCallback(() => {
-    if (!strikerId || !bowlerId) return;
     Alert.alert(
       'Penalty Runs',
       'Add 5 penalty runs?',
@@ -419,64 +364,28 @@ export function useScoringState({
         {
           text: 'Add 5 Runs',
           onPress: () => {
-            const newBall = createPenaltyEvent({
-              matchId: localMatchIdRef.current,
-              inningsId: String(currentInningsIndex),
-              bowlerId,
-              strikerId,
-              nonStrikerId: nonStrikerId || 'unknown',
-            }, 5);
-            addBall(newBall);
+            sessionHandlePenalty(5);
           },
         },
       ]
     );
-  }, [addBall, strikerId, bowlerId, nonStrikerId, currentInningsIndex]);
+  }, [sessionHandlePenalty]);
 
   const handleUndo = useCallback(async () => {
-    if (localBalls.length === 0) return;
-    
-    const ballToUndo = localBalls[localBalls.length - 1];
-    setLocalBalls((prev) => prev.slice(0, -1));
-
-    // Restore the striker and non-striker to who they were at the start of the undone ball
-    setStrikerId(ballToUndo.strikerId);
-    setNonStrikerId(ballToUndo.nonStrikerId);
-  }, [localBalls]);
+    sessionUndoBall();
+  }, [sessionUndoBall]);
 
 
   const handlePickPlayer = useCallback(
     (playerId: string) => {
-      let newStrikerId = strikerId;
-      let newNonStrikerId = nonStrikerId;
-      let newBowlerId = bowlerId;
-
-      if (pickerMode === 'striker') {
-        setStrikerId(playerId);
-        newStrikerId = playerId;
-        if (cascadeToBowlerRef.current) {
-          cascadeToBowlerRef.current = false;
-          setPickerMode('bowler');
-          return;
-        }
-      } else if (pickerMode === 'nonStriker') {
-        setNonStrikerId(playerId);
-        newNonStrikerId = playerId;
-      } else if (pickerMode === 'bowler') {
-        setBowlerId(playerId);
-        newBowlerId = playerId;
-      }
-      setPickerMode(null);
+      sessionPickPlayer(playerId);
     },
-    [pickerMode, strikerId, nonStrikerId, bowlerId]
+    [sessionPickPlayer]
   );
 
   const handleSwapStrike = useCallback(() => {
-    const s = strikerId;
-    const ns = nonStrikerId;
-    setStrikerId(ns);
-    setNonStrikerId(s);
-  }, [strikerId, nonStrikerId]);
+    sessionSwapStrike();
+  }, [sessionSwapStrike]);
 
   const handleEndInnings = useCallback(async () => {
     Alert.alert(
@@ -488,24 +397,21 @@ export function useScoringState({
           text: 'End Innings',
           style: 'destructive',
           onPress: async () => {
-            if (localCurrentInningsIndex === 0) {
-              setLocalFirstInningsRuns(stats.totalRuns);
-              setLocalCurrentInningsIndex(1);
-              setLocalBalls([]);
+            if (currentInningsIndex === 0) {
+              session.startNextInnings(stats.totalRuns);
+              setIsAwaitingNextOverConfirmation(false);
               setShowOverCompleteModal(false);
-              setBowlerId(null);
-              setStrikerId(null);
-              setNonStrikerId(null);
             } else {
               Alert.alert('Match Ended', 'The local match is over.');
+              setIsAwaitingNextOverConfirmation(false);
               setShowOverCompleteModal(false);
-              setBowlerId(null);
+              session.setPlayers(strikerId, nonStrikerId, null);
             }
           }
         }
       ]
     );
-  }, [localCurrentInningsIndex, stats.totalRuns]);
+  }, [currentInningsIndex, nonStrikerId, session, stats.totalRuns, strikerId]);
 
   const handleEndMatch = useCallback(async () => {
     Alert.alert(
@@ -523,13 +429,13 @@ export function useScoringState({
               await saveLocalMatch({
                 id: localMatchIdRef.current,
                 config: resolvedConfig,
-                balls: localBalls,
+                balls,
                 strikerId,
                 nonStrikerId,
                 bowlerId,
                 status: 'abandoned',
-                currentInningsIndex: localCurrentInningsIndex,
-                firstInningsRuns: localFirstInningsRuns,
+                currentInningsIndex,
+                firstInningsRuns,
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
               });
@@ -540,8 +446,8 @@ export function useScoringState({
       ]
     );
   }, [
-    resolvedConfig, localBalls, strikerId, nonStrikerId, bowlerId, router,
-    localCurrentInningsIndex, localFirstInningsRuns
+    resolvedConfig, balls, strikerId, nonStrikerId, bowlerId, router,
+    currentInningsIndex, firstInningsRuns
   ]);
 
   return {
@@ -579,7 +485,7 @@ export function useScoringState({
     activeTab,
     showSettingsModal,
     expandedSection,
-    setPickerMode,
+    setPickerMode: sessionSetPickerMode,
     setActiveTab,
     setShowSettingsModal,
     setExpandedSection,

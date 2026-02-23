@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { Colors, Spacing, Typography, BorderRadius } from '@crichead/ui/mobile';
 import type { PlayerInfo } from '../../types/scoring';
 
@@ -18,66 +18,66 @@ export function PlayerPickerModal({
   onPickPlayer,
   onClose,
 }: PlayerPickerModalProps) {
-  return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
-    >
-      <View style={styles.overlay}>
-        <View style={styles.content}>
-          <View style={styles.header}>
-            <Text style={styles.title}>{title}</Text>
-            <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
-              <Text style={styles.closeBtn}>{'\u2715'}</Text>
-            </TouchableOpacity>
-          </View>
+  if (!visible) return null;
 
-          <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-            {players.length === 0 ? (
-              <Text style={styles.emptyText}>No players available</Text>
-            ) : (
-              players.map((player) => (
-                <TouchableOpacity
-                  key={player.id}
-                  style={styles.playerRow}
-                  onPress={() => onPickPlayer(player.id)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>
-                      {player.name.charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                  <View style={styles.info}>
-                    <Text style={styles.name}>{player.name}</Text>
-                    <Text style={styles.role}>
-                      {player.role === 'bat'
-                        ? 'Batsman'
-                        : player.role === 'bowl'
-                          ? 'Bowler'
-                          : 'All-rounder'}
-                    </Text>
-                  </View>
-                  <View style={styles.chevron}>
-                    <Text style={styles.chevronText}>{'\u203A'}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))
-            )}
-          </ScrollView>
+  return (
+    <View style={styles.overlay}>
+      <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
+      <View style={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.title}>{title}</Text>
+          <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
+            <Text style={styles.closeBtn}>{'\u2715'}</Text>
+          </TouchableOpacity>
         </View>
+
+        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+          {players.length === 0 ? (
+            <Text style={styles.emptyText}>No players available</Text>
+          ) : (
+            players.map((player) => (
+              <TouchableOpacity
+                key={player.id}
+                style={styles.playerRow}
+                onPress={() => onPickPlayer(player.id)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>
+                    {player.name.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.info}>
+                  <Text style={styles.name}>{player.name}</Text>
+                  <Text style={styles.role}>
+                    {player.role === 'bat'
+                      ? 'Batsman'
+                      : player.role === 'bowl'
+                        ? 'Bowler'
+                        : 'All-rounder'}
+                  </Text>
+                </View>
+                <View style={styles.chevron}>
+                  <Text style={styles.chevronText}>{'\u203A'}</Text>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+        </ScrollView>
       </View>
-    </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   overlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'flex-end',
+    zIndex: 20,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
   },
   content: {
     backgroundColor: Colors.deepNavy,
