@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
 import { type TossDecision, makePlayers } from '@crichead/core';
 import type { QuickMatchConfig } from '../types/QuickMatchConfig';
-import { saveLocalMatch, generateLocalId } from '../utils/localMatchStore';
+import { saveLocalMatch, generateLocalId, toLocalRouteMatchId } from '../utils/localMatchStore';
 
 /* ── Temporary data ── */
 
@@ -37,6 +37,7 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
   const [tossWinner, setTossWinner] = useState<string | null>(null);
   const [tossDecision, setTossDecision] = useState<TossDecision | null>(null);
   const [creating, setCreating] = useState(false);
+  const startInFlightRef = useRef(false);
 
   const homePlayers = makePlayers('Home', playersPerSide);
   const awayPlayers = makePlayers('Away', playersPerSide);
@@ -57,11 +58,16 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
   }
 
   async function handleStartMatch() {
+    if (creating || startInFlightRef.current) {
+      return;
+    }
+
     if (!tossWinner || !tossDecision) {
       Alert.alert('Toss Required', 'Select who won the toss and their decision.');
       return;
     }
 
+    startInFlightRef.current = true;
     setCreating(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
@@ -101,12 +107,13 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
-      onMatchCreated(`local-${localId}`, config);
+      onMatchCreated(toLocalRouteMatchId(localId), config);
     } catch (err) {
       Alert.alert(
         'Error',
         err instanceof Error ? err.message : 'Failed to create match',
       );
+      startInFlightRef.current = false;
       setCreating(false);
     }
   }

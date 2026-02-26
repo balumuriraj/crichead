@@ -28,7 +28,7 @@ export interface ScoringSessionConfig {
   engineConfig: ScoringEngineConfig;
   repository: MatchRepository;
 
-  /** Initial balls to seed the session (e.g. from local storage or Firestore snapshot) */
+  /** Initial balls to seed the session (e.g. from local storage snapshot) */
   initialBalls?: BallEvent[];
 
   /** Initial player IDs */
@@ -124,6 +124,14 @@ export class ScoringSession {
     });
   }
 
+  private persistPlayerState(): void {
+    this.persist(this.repository.updateMatchState(this.matchId, {
+      strikerId: this.strikerId,
+      nonStrikerId: this.nonStrikerId,
+      bowlerId: this.bowlerId,
+    }));
+  }
+
   // ---- Computed State ----
 
   private computeStats(): DerivedMatchState {
@@ -152,7 +160,7 @@ export class ScoringSession {
     return this.snapshotCache;
   }
 
-  // ---- State Setters (for external sync, e.g. Firestore snapshot) ----
+  // ---- State Setters (for external sync, e.g. storage snapshot) ----
 
   setBalls(balls: BallEvent[]): void {
     if (this.balls === balls) {
@@ -187,12 +195,7 @@ export class ScoringSession {
     this.nonStrikerId = nonStrikerId;
     this.bowlerId = bowlerId;
     this.emitChange();
-
-    this.persist(this.repository.updateMatchState(this.matchId, {
-      strikerId: this.strikerId,
-      nonStrikerId: this.nonStrikerId,
-      bowlerId: this.bowlerId,
-    }));
+    this.persistPlayerState();
   }
 
   setPickerMode(mode: PickerMode): void {
@@ -255,6 +258,7 @@ export class ScoringSession {
     this.emitChange();
 
     this.persist(this.repository.addBall(ball));
+    this.persistPlayerState();
     return ball;
   }
 
@@ -266,10 +270,12 @@ export class ScoringSession {
     if (this.balls.length === 0) return null;
     const removed = this.balls[this.balls.length - 1]!;
     this.balls = this.balls.slice(0, -1);
+    const lastRemainingBall = this.balls[this.balls.length - 1] ?? null;
 
     // Restore player state from the undone ball
     this.strikerId = removed.strikerId;
     this.nonStrikerId = removed.nonStrikerId;
+    this.bowlerId = lastRemainingBall?.bowlerId ?? removed.bowlerId;
 
     // Reset detection tracking
     const stats = this.computeStats();
@@ -279,6 +285,7 @@ export class ScoringSession {
 
     this.emitChange();
     this.persist(this.repository.undoLastBall());
+    this.persistPlayerState();
     return removed;
   }
 
@@ -295,6 +302,8 @@ export class ScoringSession {
       const prev = this.strikerId;
       this.strikerId = this.nonStrikerId;
       this.nonStrikerId = prev;
+      this.emitChange();
+      this.persistPlayerState();
     }
 
     return ball;
@@ -360,6 +369,7 @@ export class ScoringSession {
       this.pickerMode = null;
     }
     this.emitChange();
+    this.persistPlayerState();
   }
 
   /** Swap striker and non-striker */
@@ -368,6 +378,7 @@ export class ScoringSession {
     this.strikerId = this.nonStrikerId;
     this.nonStrikerId = prev;
     this.emitChange();
+    this.persistPlayerState();
   }
 
   // ---- Innings Transition ----

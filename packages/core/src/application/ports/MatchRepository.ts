@@ -2,7 +2,7 @@
  * MatchRepository — Port interface for match data persistence.
  *
  * This defines the abstract boundary between the application/domain layers
- * and the infrastructure layer (Firebase, local storage, etc.).
+ * and the infrastructure layer (local storage, remote APIs, etc.).
  *
  * The ScoringSession currently uses callbacks for remote sync, which
  * naturally map to this interface. Consumers can implement this interface

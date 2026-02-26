@@ -9,7 +9,7 @@ import {
   formatBallDisplay,
   splitBallsIntoOvers,
   EventSchema,
-  type FirestoreInningsSummary,
+  type InningsSummary,
 } from '@crichead/core';
 
 // ---------------------------------------------------------------------------
@@ -25,7 +25,7 @@ function getBallColor(ball: EventSchema.BallEvent): string {
   return 'bg-[#334155] text-white';
 }
 
-function getStatsFromSummary(summary: FirestoreInningsSummary) {
+function getStatsFromSummary(summary: InningsSummary) {
   const { currentOver, currentBall } = parseOvers(summary.overs);
   const runRate = calculateRunRate(summary.totalRuns, currentOver, currentBall);
   const oversFormatted = formatOvers(currentOver, currentBall);
@@ -266,7 +266,7 @@ export default function MatchPage() {
         {/* Footer */}
         <div className="text-center py-4">
           <p className="text-xs text-gray-600">
-            Live scorecard powered by <span className="text-[#00FF41]">crichead</span> &middot; Updates in real-time via Firebase
+            Live scorecard powered by <span className="text-[#00FF41]">crichead</span> &middot; Offline scoring mode
           </p>
         </div>
       </div>

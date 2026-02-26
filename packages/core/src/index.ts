@@ -2,7 +2,7 @@
 // @crichead/core — Domain-Only Entry Point
 //
 // This main entry exports ONLY framework-free code: types, schema, scoring
-// engine, actions, session, and utilities. No React. No Firebase.
+// engine, actions, session, and utilities. No React. No cloud dependency.
 //
 // For React hooks:     import { useScoringSession } from '@crichead/core/hooks'
 // ============================================================================

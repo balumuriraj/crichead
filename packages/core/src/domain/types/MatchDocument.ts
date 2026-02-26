@@ -8,7 +8,7 @@ export interface PlayingXIEntry {
   role: PlayerRole;
 }
 
-export interface FirestoreInningsSummary {
+export interface InningsSummary {
   teamId: string;
   totalRuns: number;
   totalWickets: number;
@@ -16,7 +16,7 @@ export interface FirestoreInningsSummary {
   ballCount: number;
 }
 
-export interface FirestoreMatchDoc {
+export interface MatchDocument {
   id: string;
   teamA: string;
   teamB: string;
@@ -25,7 +25,7 @@ export interface FirestoreMatchDoc {
   toss: Toss | null;
   status: MatchStatus;
   currentInningsIndex: number;
-  innings: FirestoreInningsSummary[];
+  innings: InningsSummary[];
   playingXI?: Record<string, PlayingXIEntry[]>;
   oversPerInnings?: number;
   playersPerSide?: number;
@@ -35,6 +35,6 @@ export interface FirestoreMatchDoc {
   currentBowlerId?: string | null;
 }
 
-export interface FirestoreBallDoc extends Ball {
+export interface BallDocument extends Ball {
   sequence: number;
 }

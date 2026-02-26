@@ -51,7 +51,7 @@ Three-column-ish layout:
   - Primary Color (color input, defaults `#00FF41`)
   - Secondary Color (color input, defaults `#0F172A`)
   - Logo URL (text input)
-  - Save button (writes to Firestore `settings/theme` doc)
+  - Save button (writes to local storage `settings/theme` entry)
   - Reset to defaults button
 - **Right**: Live preview panel wrapped in its own `<ThemeProvider>` using the form values
   - Shows: LiveScoreHeader, ScoreButton row, ExtraButton row, WicketButton, OverProgress
@@ -112,12 +112,12 @@ A client component that receives `{ primaryColor, secondaryColor, logoUrl }` as 
 1. **Static `Colors` object remains** — it serves as the default/fallback. `useThemedColors` merges it with context overrides.
 2. **Mobile components switch from StyleSheet.create to useMemo'd styles** — `StyleSheet.create` runs once at module load time and can't use dynamic values. We'll compute styles in the component body with `useMemo`.
 3. **Preview uses HTML mockups, not react-native-web** — avoids a heavy dependency. The mockups are simple divs styled to look like the mobile components.
-4. **Firestore persistence** — the admin page saves theme to `settings/theme` doc. On load, it reads from Firestore. Future: league-level themes stored per league.
+4. **Local persistence** — the admin page saves theme to local storage `settings/theme` entry. On load, it reads from local storage. Future: league-level themes can be moved behind a remote adapter.
 
 ## Verification
 1. `npm run build` — all packages compile
 2. `npm test` — all 16 existing tests pass
 3. Navigate to `/admin/settings` — form renders with default colors
 4. Change primary color → preview updates instantly
-5. Save → reload page → values persist from Firestore
+5. Save → reload page → values persist locally
 6. Mobile app: wrap root in `<ThemeProvider>` → components pick up new colors

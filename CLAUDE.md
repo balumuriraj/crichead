@@ -30,6 +30,7 @@ npm run lint         # tsc --noEmit
 npm run dev          # Expo start (opens Expo Go or simulator)
 npm run ios          # expo start --ios
 npm run android      # expo start --android
+npx expo start --clear --ios 
 ```
 
 ### Core Package (`packages/core`)
@@ -40,47 +41,36 @@ npm run test:ui      # vitest --ui (browser UI)
 npm run build        # tsc (compile to dist/)
 ```
 
-### Seed Scripts (`scripts/`)
-```bash
-node scripts/seed-match.mjs        # Create a test match in Firestore
-node scripts/seed-two-teams.mjs    # Create two test teams
-node scripts/add-test-ball.mjs     # Add a test ball to a match
-```
-
 ## Architecture
 
 ### Monorepo Layout
 
 ```
 apps/
-  web/        - Next.js 15 (React 18, Tailwind CSS, Firebase Admin SDK)
+  web/        - Next.js 15 (React 18, Tailwind CSS)
   mobile/     - Expo 52 / React Native 0.76 (Expo Router, tab navigation)
 packages/
-  core/       - Shared types, scoring logic, Firebase client, hooks
+  core/       - Shared types, scoring logic, offline data hooks
   ui/         - Shared UI components with platform-specific variants
-scripts/      - Firestore seed/read utilities (Node.js ESM)
 ```
 
 ### Shared Core Package (`@crichead/core`)
 
 All domain logic lives here — the apps consume it. Key modules:
 
-- **`src/types/`** — Canonical data model: `Match`, `Innings`, `Ball`, `Player`, `Team`, `Tournament`, `FirestoreMatchDoc`
+For package-level onboarding (architecture map, scoring flow, public API, and reading order), see [packages/core/README.md](packages/core/README.md).
+
+- **`src/types/`** — Canonical data model: `Match`, `Innings`, `Ball`, `Player`, `Team`, `Tournament`, `MatchDocument`
 - **`src/utils/scoring.ts`** — Innings stats calculation, over formatting (`formatOvers`), run rate
 - **`src/utils/ball-display.ts`** — Format a `Ball` for display
 - **`src/utils/player-stats.ts`** — Per-player batting/bowling aggregates
 - **`src/utils/league-logic.ts`** — Points table, tournament standings
-- **`src/firebase/client.ts`** — Client-side Firebase init + helpers (safe to bundle)
-- **`src/firebase/admin.ts`** — Firebase Admin SDK (Next.js API routes only — never import in client code)
-- **`src/hooks/useMatchSync.ts`** — Real-time Firestore match subscription
 
-### Firebase / Data Model
+### Offline Data Model
 
-Firestore is the primary database. Client and Admin SDKs are deliberately separated:
-- Import from `@crichead/core/firebase/client` in components and hooks
-- Import from `@crichead/core/firebase/admin` only inside Next.js API routes / Server Components
+Local storage is the primary runtime storage for now.
 
-A match document (`FirestoreMatchDoc`) contains embedded innings, and each innings embeds an array of `Ball` objects.
+A match document (`MatchDocument`) contains innings summaries and player selection state. Ball-by-ball events are maintained in local match repositories used by web/mobile scoring flows.
 
 ### Web App (`@crichead/web`)
 
@@ -91,7 +81,7 @@ Next.js App Router. Key routes:
 - `/matches/[id]/score` — Live scoring page
 - `/admin` — Admin dashboard
 
-Uses Firebase Admin SDK for server-side data fetching (API routes and Server Components).
+Uses local storage backed providers for now.
 
 ### Mobile App (`@crichead/mobile`)
 
@@ -108,16 +98,6 @@ Design tokens live in `packages/core/src/tokens.ts`:
 - Semantic colors for success/warning/error/info
 
 `@crichead/ui` exports platform-aware components — some have separate web and native implementations.
-
-## Environment Variables
-
-Copy `.env.example` to `.env.local` in `apps/web`. Required vars:
-
-```
-NEXT_PUBLIC_FIREBASE_*   # Client-side Firebase config
-FIREBASE_PROJECT_ID      # Admin SDK project
-GOOGLE_APPLICATION_CREDENTIALS  # Path to serviceAccountKey.json
-```
 
 ## Testing
 

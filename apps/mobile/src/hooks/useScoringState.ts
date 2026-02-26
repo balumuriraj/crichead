@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { type ExtraType } from '@crichead/ui/mobile';
@@ -14,9 +14,16 @@ import {
 import type { QuickMatchConfig } from '../types/QuickMatchConfig';
 import {
   generateLocalId,
+  loadLocalMatch,
+  normalizeLocalMatchId,
   saveLocalMatch,
 } from '../utils/localMatchStore';
 import type { TabKey } from '../types/scoring';
+import type {
+  ScorecardInnings,
+  ScorecardBatterRow,
+  ScorecardFallOfWicket,
+} from '../types/scorecard';
 import type { PickerMode, PlayerInfo } from '@crichead/core';
 import { createLocalMatchRepository } from '../repositories/localMatchRepository';
 import { useScoringUiState } from './scoring/useScoringUiState';
@@ -31,6 +38,53 @@ interface UseScoringStateInput {
   matchId: string | null;
   config?: QuickMatchConfig;
   initialLocalMatchId?: string;
+}
+
+function formatOvers(over: number, ball: number): string {
+  return `${over}.${ball}`;
+}
+
+function deriveBattingOrder(config?: QuickMatchConfig): { firstBattingTeamId: string | null; secondBattingTeamId: string | null } {
+  if (!config) {
+    return { firstBattingTeamId: null, secondBattingTeamId: null };
+  }
+
+  const toss = config.toss;
+  if (toss?.winner && toss?.decision) {
+    const firstBattingTeamId =
+      toss.decision === 'bat'
+        ? toss.winner
+        : toss.winner === config.teamA
+          ? config.teamB
+          : config.teamA;
+
+    return {
+      firstBattingTeamId,
+      secondBattingTeamId: firstBattingTeamId === config.teamA ? config.teamB : config.teamA,
+    };
+  }
+
+  return {
+    firstBattingTeamId: config.teamA,
+    secondBattingTeamId: config.teamB,
+  };
+}
+
+function getTeamName(teamId: string | null, config?: QuickMatchConfig): string {
+  if (!teamId || !config) return 'Team';
+  return teamId === config.teamA ? config.teamAName : config.teamBName;
+}
+
+function formatDismissal(ball: EventSchema.BallEvent): string {
+  if (!ball.wicket) {
+    return '';
+  }
+
+  const wicketType = ball.wicket.type;
+  if (wicketType === 'run out') {
+    return 'run out';
+  }
+  return wicketType;
 }
 
 export interface ScoringState {
@@ -97,6 +151,7 @@ export interface ScoringState {
   handleEndMatch: () => Promise<void>;
   handleStartNextOver: () => void;
   completedOverBalls: EventSchema.BallEvent[];
+  scorecardInnings: ScorecardInnings[];
 }
 
 // ---------------------------------------------------------------------------
@@ -124,15 +179,18 @@ export function useScoringState({
   } = useScoringUiState();
 
   const isLiveMode = false;
+  const canonicalMatchId = matchId
+    ? normalizeLocalMatchId(matchId)
+    : initialLocalMatchId ?? generateLocalId();
 
   // ---- Stable refs ----
-  const localMatchIdRef = useRef<string>(initialLocalMatchId ?? generateLocalId());
+  const localMatchIdRef = useRef<string>(canonicalMatchId);
   const isMatchEndedRef = useRef<boolean>(false);
   const resolvedConfigRef = useRef<QuickMatchConfig | undefined>(resolvedConfig);
   resolvedConfigRef.current = resolvedConfig;
   const repositoryRef = useRef<MatchRepository>(
     createLocalMatchRepository({
-      matchId: matchId ?? localMatchIdRef.current,
+      matchId: localMatchIdRef.current,
       getConfig: () => resolvedConfigRef.current,
     })
   );
@@ -157,7 +215,7 @@ export function useScoringState({
     setPickerMode: sessionSetPickerMode,
     session,
   } = useScoringSession({
-    matchId: matchId ?? localMatchIdRef.current,
+    matchId: localMatchIdRef.current,
     config: resolvedConfig ?? null,
     repository: repositoryRef.current,
     match: null,
@@ -206,6 +264,135 @@ export function useScoringState({
 
   const batsmenStatsMap = stats.batterStats;
   const bowlerStatsMap = stats.bowlerStats;
+
+  const scorecardInnings = useMemo<ScorecardInnings[]>(() => {
+    if (balls.length === 0) {
+      return [];
+    }
+
+    const { firstBattingTeamId, secondBattingTeamId } = deriveBattingOrder(resolvedConfig);
+    const inningsTeamMap: Record<number, string | null> = {
+      0: firstBattingTeamId,
+      1: secondBattingTeamId,
+    };
+
+    const inningsIndices = Array.from(
+      new Set(
+        balls
+          .map((ball) => Number.parseInt(ball.inningsId, 10))
+          .filter((index) => Number.isFinite(index))
+      )
+    ).sort((a, b) => a - b);
+
+    return inningsIndices.map((inningsIndex) => {
+      const inningsId = String(inningsIndex);
+      const inningsBalls = balls.filter((ball) => ball.inningsId === inningsId);
+      const inningsState = EventScoring.getMatchStatus(inningsBalls, {
+        oversPerInnings: maxOvers,
+        wicketsPerInnings: maxWickets,
+      });
+
+      const playerFirstSeen = new Map<string, number>();
+      inningsBalls.forEach((ball, index) => {
+        if (!playerFirstSeen.has(ball.strikerId)) {
+          playerFirstSeen.set(ball.strikerId, index);
+        }
+        if (!playerFirstSeen.has(ball.nonStrikerId)) {
+          playerFirstSeen.set(ball.nonStrikerId, index);
+        }
+      });
+
+      const dismissalByPlayer = new Map<string, string>();
+      const fallOfWickets: ScorecardFallOfWicket[] = [];
+
+      let runsAtWicket = 0;
+      let wicketsFallen = 0;
+      let legalBallsAtWicket = 0;
+      for (const ball of inningsBalls) {
+        const isLegalDelivery = ball.deliveryType !== 'wide' && ball.deliveryType !== 'no-ball';
+        if (isLegalDelivery) {
+          legalBallsAtWicket += 1;
+        }
+        runsAtWicket += ball.runs.bat + ball.runs.extra + (ball.runs.penalty || 0);
+        if (ball.wicket) {
+          wicketsFallen += 1;
+          dismissalByPlayer.set(ball.wicket.dismissedId, formatDismissal(ball));
+          fallOfWickets.push({
+            wicketNumber: wicketsFallen,
+            score: `${runsAtWicket}/${wicketsFallen}`,
+            playerName: getPlayerName(ball.wicket.dismissedId),
+            over: formatOvers(
+              Math.floor(legalBallsAtWicket / 6),
+              legalBallsAtWicket % 6,
+            ),
+          });
+        }
+      }
+
+      const battingRows: ScorecardBatterRow[] = Array.from(playerFirstSeen.entries())
+        .sort((left, right) => left[1] - right[1])
+        .map(([playerId]) => {
+          const batterStats = inningsState.batterStats[playerId] ?? {
+            runs: 0,
+            ballsFaced: 0,
+            fours: 0,
+            sixes: 0,
+          };
+          const isOut = dismissalByPlayer.has(playerId);
+          return {
+            playerId,
+            playerName: getPlayerName(playerId),
+            runs: batterStats.runs,
+            balls: batterStats.ballsFaced,
+            fours: batterStats.fours,
+            sixes: batterStats.sixes,
+            strikeRate: batterStats.ballsFaced > 0
+              ? ((batterStats.runs / batterStats.ballsFaced) * 100).toFixed(1)
+              : '0.0',
+            dismissalText: dismissalByPlayer.get(playerId) ?? '',
+            isOut,
+          };
+        });
+
+      const bowlingRows = Object.entries(inningsState.bowlerStats)
+        .map(([playerId, bowlerStats]) => {
+          const validBalls = bowlerStats.validBalls ?? 0;
+          const overs = formatOvers(
+            Math.floor(validBalls / 6),
+            validBalls % 6,
+          );
+          const economy = bowlerStats.validBalls > 0
+            ? ((bowlerStats.runs / bowlerStats.validBalls) * 6).toFixed(1)
+            : '0.0';
+          return {
+            validBalls,
+            playerId,
+            playerName: getPlayerName(playerId),
+            overs,
+            maidens: bowlerStats.maidens,
+            runs: bowlerStats.runs,
+            wickets: bowlerStats.wickets,
+            economy,
+          };
+        })
+        .sort((left, right) => right.validBalls - left.validBalls)
+        .map(({ validBalls: _validBalls, ...row }) => row);
+
+      const teamId = inningsTeamMap[inningsIndex] ?? null;
+
+      return {
+        inningsIndex,
+        teamId: teamId ?? `innings-${inningsIndex}`,
+        teamName: getTeamName(teamId, resolvedConfig),
+        score: `${inningsState.totalRuns}/${inningsState.totalWickets}`,
+        overs: formatOvers(inningsState.currentOver, inningsState.currentBall),
+        batting: battingRows,
+        bowling: bowlingRows,
+        extras: inningsState.extras,
+        fallOfWickets,
+      };
+    });
+  }, [balls, getPlayerName, maxOvers, maxWickets, resolvedConfig]);
 
   const {
     showOverCompleteModal,
@@ -342,17 +529,31 @@ export function useScoringState({
             setShowSettingsModal(false);
             isMatchEndedRef.current = true;
             if (resolvedConfig) {
+              const persistedRecord = await loadLocalMatch(localMatchIdRef.current);
+              const persistedBalls = (persistedRecord?.balls ?? []) as EventSchema.BallEvent[];
+              const currentInningsId = String(currentInningsIndex);
+
+              const historicalBalls = persistedBalls.filter((ball) => {
+                if (!ball || typeof ball !== 'object' || !('deliveryType' in ball)) {
+                  return true;
+                }
+
+                return (ball as EventSchema.BallEvent).inningsId !== currentInningsId;
+              });
+
+              const mergedBalls = [...historicalBalls, ...balls];
+
               await saveLocalMatch({
                 id: localMatchIdRef.current,
                 config: resolvedConfig,
-                balls,
+                balls: mergedBalls,
                 strikerId,
                 nonStrikerId,
                 bowlerId,
-                status: 'abandoned',
+                status: isMatchFinished ? 'finished' : 'abandoned',
                 currentInningsIndex,
                 firstInningsRuns,
-                createdAt: Date.now(),
+                createdAt: persistedRecord?.createdAt ?? Date.now(),
                 updatedAt: Date.now(),
               });
             }
@@ -363,7 +564,7 @@ export function useScoringState({
     );
   }, [
     resolvedConfig, balls, strikerId, nonStrikerId, bowlerId, router,
-    currentInningsIndex, firstInningsRuns
+    currentInningsIndex, firstInningsRuns, isMatchFinished
   ]);
 
   return {
@@ -420,5 +621,6 @@ export function useScoringState({
     setShowOverCompleteModal,
     completedOverBalls,
     isOverCompleteWaiting,
+    scorecardInnings,
   };
 }

@@ -11,7 +11,7 @@ import type {
   PlayerRecord,
   TournamentRecord,
 } from '../../application/ports/DataProvider';
-import type { FirestoreMatchDoc } from '../../domain/types/Firestore';
+import type { MatchDocument } from '../../domain/types/MatchDocument';
 import { makePlayers } from '../../shared/utils/make-players';
 
 const TEAMS_KEY = 'crichead:teams';
@@ -59,8 +59,8 @@ export function createLocalStorageDataProvider(): DataProvider {
       return tournaments.find((t) => t.id === tournamentId) ?? null;
     },
 
-    async getTournamentMatches(tournamentId: string): Promise<FirestoreMatchDoc[]> {
-      const byTournament = readJson<Record<string, FirestoreMatchDoc[]>>(
+    async getTournamentMatches(tournamentId: string): Promise<MatchDocument[]> {
+      const byTournament = readJson<Record<string, MatchDocument[]>>(
         TOURNAMENT_MATCHES_KEY,
         {},
       );

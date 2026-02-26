@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
 import { type PlayerRole, type Toss, type MatchConfig } from '@crichead/core';
 import { type LocalTeamInfo } from './SelectTeamsScreen';
-import { saveLocalMatch, generateLocalId } from '../utils/localMatchStore';
+import { saveLocalMatch, generateLocalId, toLocalRouteMatchId } from '../utils/localMatchStore';
 
 export interface LocalPlayerInfo {
   id: string;
@@ -56,6 +56,7 @@ export default function SelectRosterScreen({
   const [selectedA, setSelectedA] = useState<Set<string>>(new Set());
   const [selectedB, setSelectedB] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
+  const startInFlightRef = useRef(false);
 
   // Tab state
   const [activeTab, setActiveTab] = useState<'A' | 'B'>('A');
@@ -104,11 +105,16 @@ export default function SelectRosterScreen({
   }
 
   async function handleStartMatch() {
+    if (creating || startInFlightRef.current) {
+      return;
+    }
+
     if (selectedA.size === 0 || selectedB.size === 0) {
       Alert.alert('Select Players', 'Select at least 1 player per team.');
       return;
     }
 
+    startInFlightRef.current = true;
     setCreating(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
@@ -150,12 +156,13 @@ export default function SelectRosterScreen({
         updatedAt: Date.now()
       });
 
-      onNext(`local-${localId}`);
+      onNext(toLocalRouteMatchId(localId));
     } catch (err) {
       Alert.alert(
         'Error',
         err instanceof Error ? err.message : 'Failed to create match',
       );
+      startInFlightRef.current = false;
       setCreating(false);
     }
   }

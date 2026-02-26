@@ -144,7 +144,7 @@ export default function AdminSettingsPage() {
               </div>
 
               {saved && (
-                <p className="text-xs text-[#00FF41] text-center">Theme saved to Firestore</p>
+                <p className="text-xs text-[#00FF41] text-center">Theme saved locally</p>
               )}
             </div>
           </div>

@@ -1,10 +1,10 @@
-import type { PlayingXIEntry } from './Firestore';
+import type { PlayingXIEntry } from './MatchDocument';
 import type { Toss } from './Match';
 
 /**
  * The minimal config shape that the scoring engine needs.
  *
- * Both `QuickMatchConfig` (local/mobile) and `FirestoreMatchDoc` (live)
+ * Both local quick-match config and persisted match documents
  * satisfy this interface, so the engine can accept either without `any`.
  */
 export interface ScoringConfig {

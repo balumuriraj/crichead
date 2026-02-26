@@ -9,7 +9,7 @@ import { useRef, useSyncExternalStore, useCallback } from 'react';
 import type { BallEvent, WicketTypeEvent } from '../../domain/schema/ballEvent';
 import type { ExtraTypeCode, PickerMode } from '../../application/types';
 import type { ScoringConfig } from '../../domain/types/ScoringConfig';
-import type { FirestoreMatchDoc } from '../../domain/types/Firestore';
+import type { MatchDocument } from '../../domain/types/MatchDocument';
 import { ScoringSession, type ScoringSessionConfig } from '../../application/ScoringSession';
 import type { MatchRepository } from '../../application/ports/MatchRepository';
 import { useScoringEngine } from './useScoringEngine';
@@ -20,7 +20,7 @@ export interface UseScoringSessionProps {
   matchId: string;
   config: ScoringConfig | null;
   repository: MatchRepository;
-  match?: FirestoreMatchDoc | null;
+  match?: MatchDocument | null;
   isLiveMode: boolean;
   localCurrentInningsIndex: number;
   localFirstInningsRuns: number | null;

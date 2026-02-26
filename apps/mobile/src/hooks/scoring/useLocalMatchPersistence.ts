@@ -40,9 +40,12 @@ export function useLocalMatchPersistence({
       }
 
       setResolvedConfig(record.config as QuickMatchConfig);
-      const loadedBalls = (record.balls as any[]).map((ball) =>
-        ball.deliveryType ? ball : migrateBallToEvent(ball, record.id, String(record.currentInningsIndex || 0))
-      );
+      const currentInningsId = String(record.currentInningsIndex ?? 0);
+      const loadedBalls = (record.balls as any[])
+        .map((ball) =>
+          ball.deliveryType ? ball : migrateBallToEvent(ball, record.id, currentInningsId)
+        )
+        .filter((ball) => ball.inningsId === currentInningsId);
 
       session.setMatchId(record.id ?? localMatchId);
       session.setCurrentInningsIndex(record.currentInningsIndex ?? 0);

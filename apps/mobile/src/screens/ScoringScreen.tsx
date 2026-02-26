@@ -22,11 +22,13 @@ import {
   ScoringTabBar,
   PlayersTabContent,
   CommentaryTabContent,
+  ScorecardsTabContent,
   PlayerPickerCards,
   ScoringPad,
   InningsCompletePad,
   PlayerPickerModal,
   OverCompleteModal,
+  MatchSummaryModal,
 } from '../components/scoring';
 
 // ---------------------------------------------------------------------------
@@ -143,9 +145,10 @@ export default function ScoringScreen({
         )}
 
         {scoring.activeTab === 'cards' && (
-          <View style={styles.cardsContent}>
-            <Text style={styles.emptyText}>Scorecards coming soon</Text>
-          </View>
+          <ScorecardsTabContent
+            innings={scoring.scorecardInnings}
+            currentInningsIndex={scoring.currentInningsIndex}
+          />
         )}
       </ScrollView>
 
@@ -219,6 +222,9 @@ export default function ScoringScreen({
             ? scoring.completedOverBalls[scoring.completedOverBalls.length - 1]!.bowlerId
             : scoring.bowlerId;
 
+        const showMatchSummaryModal = scoring.showOverCompleteModal && scoring.isMatchFinished;
+        const showOverCompleteModal = scoring.showOverCompleteModal && !scoring.isMatchFinished;
+
         const bowlerStats = completedOverBowlerId ? scoring.bowlerStatsMap[completedOverBowlerId] : null;
         const validBalls = bowlerStats?.validBalls ?? 0;
         const bOvers = `${Math.floor(validBalls / 6)}.${validBalls % 6}`;
@@ -227,21 +233,33 @@ export default function ScoringScreen({
         const bWickets = bowlerStats?.wickets ?? 0;
 
         return (
-          <OverCompleteModal
-            visible={scoring.showOverCompleteModal}
-            totalOvers={scoring.stats.currentOver}
-            scoreString={`${scoring.stats.totalRuns}/${scoring.stats.totalWickets}`}
-            bowlerName={scoring.getPlayerName(completedOverBowlerId)}
-            bowlerRole="Bowler" // If role is needed, can be passed here
-            bowlerFigures={`${bOvers}-${bMaidens}-${bRuns}-${bWickets}`}
-            balls={scoring.completedOverBalls}
-            isInningsComplete={scoring.isInningsComplete}
-            isMatchFinished={scoring.isMatchFinished}
-            onStartNextOver={scoring.handleStartNextOver}
-            onContinueOver={() => scoring.setShowOverCompleteModal(false)}
-            onEndInnings={scoring.handleEndInnings}
-            onEndMatch={scoring.handleEndMatch}
-          />
+          <>
+            <OverCompleteModal
+              visible={showOverCompleteModal}
+              totalOvers={scoring.stats.currentOver}
+              scoreString={`${scoring.stats.totalRuns}/${scoring.stats.totalWickets}`}
+              bowlerName={scoring.getPlayerName(completedOverBowlerId)}
+              bowlerRole="Bowler" // If role is needed, can be passed here
+              bowlerFigures={`${bOvers}-${bMaidens}-${bRuns}-${bWickets}`}
+              balls={scoring.completedOverBalls}
+              isInningsComplete={scoring.isInningsComplete}
+              isMatchFinished={scoring.isMatchFinished}
+              onStartNextOver={scoring.handleStartNextOver}
+              onContinueOver={() => scoring.setShowOverCompleteModal(false)}
+              onEndInnings={scoring.handleEndInnings}
+              onEndMatch={scoring.handleEndMatch}
+            />
+            <MatchSummaryModal
+              visible={showMatchSummaryModal}
+              scoreString={`${scoring.stats.totalRuns}/${scoring.stats.totalWickets}`}
+              oversString={scoring.currentOverFormatted}
+              onEndMatch={scoring.handleEndMatch}
+              onUndoLastBall={() => {
+                scoring.setShowOverCompleteModal(false);
+                scoring.handleUndo();
+              }}
+            />
+          </>
         );
       })()}
 

@@ -45,8 +45,9 @@ export function useOverCompletionFlow({
     prevOverRef.current = currentOver;
 
     const overChanged = currentOver > prevOver;
+    const isEndOfOver = currentBall === 0;
 
-    if (overChanged) {
+    if (overChanged && isEndOfOver) {
       if (pickerMode !== null) {
         sessionSetPickerMode(null);
       }

@@ -3,13 +3,13 @@
  *
  * This defines the abstract boundary for data queries (teams, players,
  * tournaments). Apps provide concrete adapters (localStorage, AsyncStorage,
- * Firebase, REST API, etc.).
+ * remote API, etc.).
  *
  * All methods are async to support both sync (localStorage) and async
  * (AsyncStorage, network) backends.
  */
 
-import type { FirestoreMatchDoc } from '../../domain/types/Firestore';
+import type { MatchDocument } from '../../domain/types/MatchDocument';
 import type { PlayerRole } from '../../domain/types/Player';
 
 export interface TeamRecord {
@@ -49,5 +49,5 @@ export interface DataProvider {
   getTournament(tournamentId: string): Promise<TournamentRecord | null>;
 
   /** Fetch matches for a tournament */
-  getTournamentMatches(tournamentId: string): Promise<FirestoreMatchDoc[]>;
+  getTournamentMatches(tournamentId: string): Promise<MatchDocument[]>;
 }

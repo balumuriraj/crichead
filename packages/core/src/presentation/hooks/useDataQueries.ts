@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { FirestoreMatchDoc } from '../../domain/types';
+import type { MatchDocument } from '../../domain/types';
 import type { TeamRecord, PlayerRecord, TournamentRecord } from '../../application/ports/DataProvider';
 import { useDataProvider } from '../DataProviderContext';
 
@@ -115,12 +115,12 @@ export function useTournamentQuery(tournamentId: string): {
 }
 
 export function useTournamentMatchesQuery(tournamentId: string): {
-  matches: FirestoreMatchDoc[];
+  matches: MatchDocument[];
   loading: boolean;
   error: string | null;
 } {
   const provider = useDataProvider();
-  const [matches, setMatches] = useState<FirestoreMatchDoc[]>([]);
+  const [matches, setMatches] = useState<MatchDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

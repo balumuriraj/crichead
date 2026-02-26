@@ -4,12 +4,12 @@ import type { MatchConfig } from '../../domain/schema/matchConfig';
 import { getMatchStatus } from '../../domain/scoring/derivedState';
 import { formatOvers, calculateRunRate } from '../../shared/utils';
 import type { ScoringConfig } from '../../domain/types/ScoringConfig';
-import type { FirestoreMatchDoc, PlayingXIEntry } from '../../domain/types/Firestore';
+import type { MatchDocument, PlayingXIEntry } from '../../domain/types/MatchDocument';
 
 export interface UseScoringEngineProps {
   balls: BallEvent[];
   config: ScoringConfig | null;
-  match?: FirestoreMatchDoc | null;
+  match?: MatchDocument | null;
   
   isLiveMode: boolean;
   localCurrentInningsIndex: number;
