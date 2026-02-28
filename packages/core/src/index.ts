@@ -36,7 +36,7 @@ export * from './application/ports';
 export * as EventStore from './application/store';
 
 // Infrastructure — Default Adapters
-export { createLocalStorageDataProvider } from './infrastructure/services/LocalStorageDataProvider';
+export { createOfflineStorageDataProvider } from './infrastructure/services/OfflineStorageDataProvider';
 
 // Shared — Utilities (formatBallDisplay, splitBallsIntoOvers, etc.)
 export * from './shared/utils';

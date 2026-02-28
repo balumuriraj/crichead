@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export interface LocalMatchConfig {
+export interface OfflineMatchConfig {
   teamA?: string;
   teamAId?: string;
   teamAName: string;
@@ -19,9 +19,9 @@ export interface LocalMatchConfig {
   [key: string]: any;
 }
 
-export interface LocalMatchRecord {
+export interface OfflineMatchRecord {
   id: string;
-  config: LocalMatchConfig;
+  config: OfflineMatchConfig;
   balls: unknown[];
   strikerId: string | null;
   nonStrikerId: string | null;
@@ -33,35 +33,35 @@ export interface LocalMatchRecord {
   updatedAt: number;
 }
 
-const STORAGE_PREFIX = '@crichead:localMatch:';
+const STORAGE_PREFIX = '@crichead:offlineMatch:';
 
-const LOCAL_ROUTE_PREFIX = 'local-';
+const OFFLINE_ROUTE_PREFIX = 'offline-';
 
 function makeStorageKey(id: string): string {
   return `${STORAGE_PREFIX}${id}`;
 }
 
 function toLegacyPrefixedId(normalizedId: string): string {
-  return `${LOCAL_ROUTE_PREFIX}${normalizedId}`;
+  return `${OFFLINE_ROUTE_PREFIX}${normalizedId}`;
 }
 
-export function normalizeLocalMatchId(id: string): string {
-  return id.startsWith(LOCAL_ROUTE_PREFIX) ? id.slice(LOCAL_ROUTE_PREFIX.length) : id;
+export function normalizeOfflineMatchId(id: string): string {
+  return id.startsWith(OFFLINE_ROUTE_PREFIX) ? id.slice(OFFLINE_ROUTE_PREFIX.length) : id;
 }
 
-export function toLocalRouteMatchId(id: string): string {
-  const normalized = normalizeLocalMatchId(id);
-  return `${LOCAL_ROUTE_PREFIX}${normalized}`;
+export function toOfflineRouteMatchId(id: string): string {
+  const normalized = normalizeOfflineMatchId(id);
+  return `${OFFLINE_ROUTE_PREFIX}${normalized}`;
 }
 
-export function generateLocalId(): string {
-  return `local_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+export function generateOfflineId(): string {
+  return `offline_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
 
-export async function saveLocalMatch(record: LocalMatchRecord): Promise<void> {
-  const normalizedId = normalizeLocalMatchId(record.id);
+export async function saveOfflineMatch(record: OfflineMatchRecord): Promise<void> {
+  const normalizedId = normalizeOfflineMatchId(record.id);
   const key = makeStorageKey(normalizedId);
-  const normalizedRecord: LocalMatchRecord = {
+  const normalizedRecord: OfflineMatchRecord = {
     ...record,
     id: normalizedId,
     updatedAt: Date.now(),
@@ -69,13 +69,13 @@ export async function saveLocalMatch(record: LocalMatchRecord): Promise<void> {
   await AsyncStorage.setItem(key, JSON.stringify(normalizedRecord));
 }
 
-export async function loadLocalMatch(id: string): Promise<LocalMatchRecord | null> {
-  const normalizedId = normalizeLocalMatchId(id);
+export async function loadOfflineMatch(id: string): Promise<OfflineMatchRecord | null> {
+  const normalizedId = normalizeOfflineMatchId(id);
   const key = makeStorageKey(normalizedId);
   const data = await AsyncStorage.getItem(key);
 
   if (data) {
-    const parsed = JSON.parse(data) as LocalMatchRecord;
+    const parsed = JSON.parse(data) as OfflineMatchRecord;
     return { ...parsed, id: normalizedId };
   }
 
@@ -86,8 +86,8 @@ export async function loadLocalMatch(id: string): Promise<LocalMatchRecord | nul
     return null;
   }
 
-  const parsedLegacy = JSON.parse(legacyData) as LocalMatchRecord;
-  const migratedRecord: LocalMatchRecord = {
+  const parsedLegacy = JSON.parse(legacyData) as OfflineMatchRecord;
+  const migratedRecord: OfflineMatchRecord = {
     ...parsedLegacy,
     id: normalizedId,
     updatedAt: Date.now(),
@@ -99,28 +99,28 @@ export async function loadLocalMatch(id: string): Promise<LocalMatchRecord | nul
   return migratedRecord;
 }
 
-export async function deleteLocalMatch(id: string): Promise<void> {
-  const normalizedId = normalizeLocalMatchId(id);
+export async function deleteOfflineMatch(id: string): Promise<void> {
+  const normalizedId = normalizeOfflineMatchId(id);
   const key = makeStorageKey(normalizedId);
   const legacyKey = makeStorageKey(toLegacyPrefixedId(normalizedId));
   await AsyncStorage.multiRemove([key, legacyKey]);
 }
 
-export async function listLocalMatches(): Promise<LocalMatchRecord[]> {
+export async function listOfflineMatches(): Promise<OfflineMatchRecord[]> {
   try {
     const keys = await AsyncStorage.getAllKeys();
     const matchKeys = keys.filter(k => k.startsWith(STORAGE_PREFIX));
     if (matchKeys.length === 0) return [];
     
     const stores = await AsyncStorage.multiGet(matchKeys);
-    const matchesById = new Map<string, LocalMatchRecord>();
+    const matchesById = new Map<string, OfflineMatchRecord>();
     
     stores.forEach(([, value]) => {
       if (value) {
         try {
-          const parsed = JSON.parse(value) as LocalMatchRecord;
-          const normalizedId = normalizeLocalMatchId(parsed.id);
-          const normalizedRecord: LocalMatchRecord = {
+          const parsed = JSON.parse(value) as OfflineMatchRecord;
+          const normalizedId = normalizeOfflineMatchId(parsed.id);
+          const normalizedRecord: OfflineMatchRecord = {
             ...parsed,
             id: normalizedId,
           };
@@ -130,7 +130,7 @@ export async function listLocalMatches(): Promise<LocalMatchRecord[]> {
             matchesById.set(normalizedId, normalizedRecord);
           }
         } catch (e) {
-          console.error('Failed to parse a local match', e);
+          console.error('Failed to parse an offline match', e);
         }
       }
     });
@@ -138,7 +138,7 @@ export async function listLocalMatches(): Promise<LocalMatchRecord[]> {
     const matches = Array.from(matchesById.values());
     return matches.sort((a, b) => b.updatedAt - a.updatedAt);
   } catch (error) {
-    console.error('Failed to list local matches:', error);
+    console.error('Failed to list offline matches:', error);
     return [];
   }
 }

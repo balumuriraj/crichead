@@ -1,5 +1,5 @@
 /**
- * LocalStorageDataProvider — DataProvider adapter backed by browser localStorage.
+ * OfflineStorageDataProvider — DataProvider adapter backed by browser localStorage.
  *
  * Uses the same storage keys as the previous hardcoded implementation.
  * Falls back to generated players via makePlayers() when none are stored.
@@ -34,7 +34,7 @@ function readJson<T>(key: string, fallback: T): T {
   }
 }
 
-export function createLocalStorageDataProvider(): DataProvider {
+export function createOfflineStorageDataProvider(): DataProvider {
   return {
     async getTeams(): Promise<TeamRecord[]> {
       return readJson<TeamRecord[]>(TEAMS_KEY, []);

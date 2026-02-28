@@ -12,8 +12,8 @@ export interface UseScoringEngineProps {
   match?: MatchDocument | null;
   
   isLiveMode: boolean;
-  localCurrentInningsIndex: number;
-  localFirstInningsRuns: number | null;
+  offlineCurrentInningsIndex: number;
+  offlineFirstInningsRuns: number | null;
   
   strikerId: string | null;
   nonStrikerId: string | null;
@@ -25,8 +25,8 @@ export function useScoringEngine({
   config,
   match,
   isLiveMode,
-  localCurrentInningsIndex,
-  localFirstInningsRuns,
+  offlineCurrentInningsIndex,
+  offlineFirstInningsRuns,
   strikerId,
   nonStrikerId,
   bowlerId,
@@ -42,11 +42,11 @@ export function useScoringEngine({
   const wicketsPerInnings = match?.wicketsPerInnings ?? config?.wicketsPerInnings ?? 10;
   const maxWickets = Math.min(wicketsPerInnings, (match?.playersPerSide ?? config?.playersPerSide ?? 11) - 1);
   const matchStatus = match?.status ?? 'live';
-  const currentInningsIndex = isLiveMode ? (match?.currentInningsIndex ?? 0) : localCurrentInningsIndex;
+  const currentInningsIndex = isLiveMode ? (match?.currentInningsIndex ?? 0) : offlineCurrentInningsIndex;
 
   const firstInningsRuns = isLiveMode
     ? (match && match.innings?.length > 1 ? match.innings[0]?.totalRuns ?? null : null)
-    : localFirstInningsRuns;
+    : offlineFirstInningsRuns;
   const isChasing = currentInningsIndex === 1 && firstInningsRuns !== null;
 
   const allOversCompleted =
@@ -66,7 +66,7 @@ export function useScoringEngine({
   const battingTeamId: string | null = isLiveMode
     ? (match?.innings?.[currentInningsIndex]?.teamId ?? null)
     : config
-      ? (localCurrentInningsIndex === 0
+      ? (offlineCurrentInningsIndex === 0
           ? (config.toss?.decision === 'bat'
               ? config.toss?.winner ?? null
               : config.toss?.winner === config.teamA

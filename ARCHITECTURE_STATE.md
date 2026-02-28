@@ -41,9 +41,9 @@ Ports:
 - `packages/core/src/infrastructure/storage/StorageProvider.ts`
 
 Adapters implementing/using ports:
-- `apps/mobile/src/repositories/localMatchRepository.ts` (implements `MatchRepository`)
-- `apps/web/app/matches/[id]/score/localMatchStore.ts` (implements `MatchRepository`)
-- `packages/core/src/infrastructure/services/LocalStorageDataProvider.ts` (implements `DataProvider`)
+- `apps/mobile/src/repositories/offlineMatchRepository.ts` (implements `MatchRepository`)
+- `apps/web/app/matches/[id]/score/offlineMatchStore.ts` (implements `MatchRepository`)
+- `packages/core/src/infrastructure/services/OfflineStorageDataProvider.ts` (implements `DataProvider`)
 - `apps/web/app/Providers.tsx` (injects `DataProvider` via context)
 
 #### C. Driver actor isolation (Thin UI) (**PARTIAL / FAIL in strict mode**)
@@ -55,7 +55,7 @@ Violations / drift under strict policy:
 - `packages/ui/src/web/OverProgress.tsx` imports `EventSchema` and `formatBallDisplay` from core.
 - `packages/ui/src/mobile/theme.ts` re-exports tokens directly from core.
 - `apps/mobile/src/hooks/useScoringState.ts` still contains rule-adjacent orchestration and mapping beyond pure rendering glue.
-- `apps/web/app/match/[id]/page.tsx` duplicates scoring display derivations (`calculateRunRate`, `formatOvers`, local helpers) in the page layer.
+- `apps/web/app/match/[id]/page.tsx` duplicates scoring display derivations (`calculateRunRate`, `formatOvers`, offline helpers) in the page layer.
 
 #### D. Core internal layering smells (not UI leakage, but hexagon hygiene risk)
 
@@ -108,7 +108,7 @@ packages/core/application
 
 packages/core/infrastructure
     -> packages/core/application/ports (implements abstractions)
-   -> external systems (localStorage/AsyncStorage/API)
+   -> external systems (offline storage/AsyncStorage/API)
 
 packages/core/domain
     -> (no application/presentation/infrastructure imports)
@@ -135,8 +135,8 @@ Input adapters:
 
 ### Driven Actors (Output)
 
-- Browser `localStorage`
-- Mobile local persistence (`AsyncStorage`-style local store wrappers)
+- Browser offline storage (`localStorage`)
+- Mobile offline persistence (`AsyncStorage`-style offline store wrappers)
 - Future remote backends (REST)
 
 Output ports:
@@ -145,10 +145,10 @@ Output ports:
 - `StorageProvider`
 
 Output adapters:
-- `apps/mobile/src/repositories/localMatchRepository.ts`
-- `apps/web/app/matches/[id]/score/localMatchStore.ts`
-- `packages/core/src/infrastructure/services/LocalStorageDataProvider.ts`
-- `packages/core/src/infrastructure/storage/localMatchService.ts`
+- `apps/mobile/src/repositories/offlineMatchRepository.ts`
+- `apps/web/app/matches/[id]/score/offlineMatchStore.ts`
+- `packages/core/src/infrastructure/services/OfflineStorageDataProvider.ts`
+- `packages/core/src/infrastructure/storage/offlineMatchService.ts`
 
 ## 6) Zero Leakage Confirmation
 

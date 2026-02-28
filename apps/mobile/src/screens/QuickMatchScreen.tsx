@@ -14,7 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
 import { type TossDecision, makePlayers } from '@crichead/core';
 import type { QuickMatchConfig } from '../types/QuickMatchConfig';
-import { saveLocalMatch, generateLocalId, toLocalRouteMatchId } from '../utils/localMatchStore';
+import { saveOfflineMatch, generateOfflineId, toOfflineRouteMatchId } from '../utils/offlineMatchStore';
 
 /* ── Temporary data ── */
 
@@ -94,9 +94,9 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
         wicketsPerInnings: wickets,
       };
 
-      const localId = generateLocalId();
-      await saveLocalMatch({
-        id: localId,
+      const offlineId = generateOfflineId();
+      await saveOfflineMatch({
+        id: offlineId,
         config,
         balls: [],
         strikerId: null,
@@ -107,7 +107,7 @@ export default function QuickMatchScreen({ onMatchCreated, onCancel }: Props) {
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
-      onMatchCreated(toLocalRouteMatchId(localId), config);
+      onMatchCreated(toOfflineRouteMatchId(offlineId), config);
     } catch (err) {
       Alert.alert(
         'Error',

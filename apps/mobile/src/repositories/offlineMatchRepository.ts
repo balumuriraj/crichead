@@ -1,22 +1,22 @@
 import type { EventSchema, MatchRepository } from '@crichead/core';
 import type { QuickMatchConfig } from '../types/QuickMatchConfig';
 import {
-  loadLocalMatch,
-  normalizeLocalMatchId,
-  saveLocalMatch,
-  type LocalMatchRecord,
-} from '../utils/localMatchStore';
+  loadOfflineMatch,
+  normalizeOfflineMatchId,
+  saveOfflineMatch,
+  type OfflineMatchRecord,
+} from '../utils/offlineMatchStore';
 
-interface LocalMatchRepositoryOptions {
+interface OfflineMatchRepositoryOptions {
   matchId: string;
   getConfig: () => QuickMatchConfig | undefined;
 }
 
-export function createLocalMatchRepository({
+export function createOfflineMatchRepository({
   matchId,
   getConfig,
-}: LocalMatchRepositoryOptions): MatchRepository {
-  const storageMatchId = normalizeLocalMatchId(matchId);
+}: OfflineMatchRepositoryOptions): MatchRepository {
+  const storageMatchId = normalizeOfflineMatchId(matchId);
   let operationQueue: Promise<void> = Promise.resolve();
 
   function runSerial(task: () => Promise<void>): Promise<void> {
@@ -25,15 +25,15 @@ export function createLocalMatchRepository({
     return next;
   }
 
-  async function ensureRecord(): Promise<LocalMatchRecord | null> {
-    const existing = await loadLocalMatch(storageMatchId);
+  async function ensureRecord(): Promise<OfflineMatchRecord | null> {
+    const existing = await loadOfflineMatch(storageMatchId);
     if (existing) return existing;
 
     const config = getConfig();
     if (!config) return null;
 
     const now = Date.now();
-    const created: LocalMatchRecord = {
+    const created: OfflineMatchRecord = {
       id: storageMatchId,
       config,
       balls: [],
@@ -47,7 +47,7 @@ export function createLocalMatchRepository({
       updatedAt: now,
     };
 
-    await saveLocalMatch(created);
+    await saveOfflineMatch(created);
     return created;
   }
 
@@ -57,7 +57,7 @@ export function createLocalMatchRepository({
         const record = await ensureRecord();
         if (!record) return;
 
-        await saveLocalMatch({
+        await saveOfflineMatch({
           ...record,
           balls: [...record.balls, ball],
           status: 'live',
@@ -71,7 +71,7 @@ export function createLocalMatchRepository({
         if (!record) return;
 
         const nextBalls = record.balls.slice(0, -1);
-        await saveLocalMatch({
+        await saveOfflineMatch({
           ...record,
           balls: nextBalls,
           status: nextBalls.length > 0 || (record.currentInningsIndex ?? 0) > 0 ? 'live' : 'upcoming',
@@ -84,7 +84,7 @@ export function createLocalMatchRepository({
         const record = await ensureRecord();
         if (!record) return;
 
-        await saveLocalMatch({
+        await saveOfflineMatch({
           ...record,
           strikerId: null,
           nonStrikerId: null,
@@ -99,7 +99,7 @@ export function createLocalMatchRepository({
         const record = await ensureRecord();
         if (!record) return;
 
-        await saveLocalMatch({
+        await saveOfflineMatch({
           ...record,
           strikerId: typeof state.strikerId === 'string' || state.strikerId === null
             ? state.strikerId as string | null

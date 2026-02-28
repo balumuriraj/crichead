@@ -38,7 +38,7 @@ import {
 interface ScoringScreenProps {
   matchId?: string | null;
   config?: QuickMatchConfig;
-  initialLocalMatchId?: string;
+  initialOfflineMatchId?: string;
   onBack?: () => void;
 }
 
@@ -49,18 +49,18 @@ interface ScoringScreenProps {
 export default function ScoringScreen({
   matchId = null,
   config,
-  initialLocalMatchId,
+  initialOfflineMatchId,
   onBack,
 }: ScoringScreenProps) {
   // All state, derived values, and handlers
   const scoring = useScoringState({
     matchId,
     config,
-    initialLocalMatchId,
+    initialOfflineMatchId,
   });
 
   // ---- Loading states ----
-  if (scoring.localLoading) {
+  if (scoring.offlineLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>

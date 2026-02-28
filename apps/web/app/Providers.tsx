@@ -2,10 +2,10 @@
 
 import { useMemo } from 'react';
 import { DataProviderContext } from '@crichead/core/hooks';
-import { createLocalStorageDataProvider } from '@crichead/core';
+import { createOfflineStorageDataProvider } from '@crichead/core';
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const dataProvider = useMemo(() => createLocalStorageDataProvider(), []);
+  const dataProvider = useMemo(() => createOfflineStorageDataProvider(), []);
 
   return (
     <DataProviderContext.Provider value={dataProvider}>

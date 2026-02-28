@@ -18,7 +18,7 @@ graph TD
     end
 
     subgraph Backend["Storage Services"]
-        LocalStore["Local Storage / AsyncStorage"]
+        LocalStore["Offline Storage / AsyncStorage"]
         FutureRemote["Future Remote API"]
     end
 
@@ -44,7 +44,7 @@ The project is structured as a single monorepo to maximize code sharing and main
 #### Mobile App (`apps/mobile`)
 - **Framework**: React Native with **Expo**.
 - **Navigation**: Uses **Expo Router** for file-based routing (e.g., `(tabs)`, `match` routes).
-- **Responsibilities**: Provides the primary, on-the-go interface for users to score matches locally, view live matches, and interact with device hardware (e.g., haptics).
+- **Responsibilities**: Provides the primary, on-the-go interface for users to score matches offline, view live matches, and interact with device hardware (e.g., haptics).
 
 #### Web App (`apps/web`)
 - **Framework**: **Next.js** (React).
@@ -60,7 +60,7 @@ For a detailed package-level guide (imports, scoring flow, boundaries, and readi
 
 - **Domain Layer (`src/domain`)**: Contains pure business logic, interfaces, schemas (via **Zod**), and the headless scoring engine (`src/domain/scoring`). This layer has zero dependencies on external libraries or infrastructure.
 - **Application Layer (`src/application`)**: Orchestrates the domain logic. Contains the global **Zustand** store (`src/application/store`) and application-specific semantic actions (`src/application/actions`).
-- **Infrastructure Layer (`src/infrastructure`)**: Implements external services, primarily local storage adapters used by query and scoring flows.
+- **Infrastructure Layer (`src/infrastructure`)**: Implements external services, primarily offline storage adapters used by query and scoring flows.
 - **Presentation Layer (`src/presentation`)**: Contains custom React Native/React hooks (`src/presentation/hooks` like `useScoringEngine`) that bridge core state and infrastructure to UI components.
 - **Shared (`src/shared`)**: General utilities and design tokens (`tokens.ts`) used across layers.
 
@@ -68,7 +68,7 @@ For a detailed package-level guide (imports, scoring flow, boundaries, and readi
 - Contains cross-platform UI components. While the exact primitive depends on the implementation (e.g., React Native Web or separate component trees), this ensures a consistent look and feel (colors, typography via `tokens.ts`) across Mobile and Web.
 
 ### 4. Backend (Offline-first)
-- **Primary Storage**: Local device/browser storage stores structured data like `MatchDocument`, `Team`, and `Player` profiles.
+- **Primary Storage**: Offline device/browser storage stores structured data like `MatchDocument`, `Team`, and `Player` profiles.
 - **Future Option**: Remote API backends can be added later through existing port abstractions.
 
 ## Key Design Patterns
@@ -77,7 +77,7 @@ For a detailed package-level guide (imports, scoring flow, boundaries, and readi
    By pulling the `useScoringState` and scoring engine out of the React Native app and into `@crichead/core`, the business logic can be independently unit-tested (via Vitest) and immediately reused on the Next.js web platform without rewriting code.
 
 2. **Event-Driven Scoring Updates**
-   Cricket scoring is complex (undo actions, extras, wickets). The scoring engine uses an event-stream approach, parsing sequential match events to derive the current state, ensuring determinism and easier local-to-live syncing.
+   Cricket scoring is complex (undo actions, extras, wickets). The scoring engine uses an event-stream approach, parsing sequential match events to derive the current state, ensuring determinism and easier offline-to-live syncing.
 
 3. **Strict Typings & Schemas**
     End-to-end type safety maps TypeScript interfaces to Zod schemas. This ensures that a `MatchDocument` conforms exactly to app expectations, preventing runtime `undefined` errors.

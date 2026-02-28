@@ -68,9 +68,9 @@ For package-level onboarding (architecture map, scoring flow, public API, and re
 
 ### Offline Data Model
 
-Local storage is the primary runtime storage for now.
+Offline storage is the primary runtime storage for now.
 
-A match document (`MatchDocument`) contains innings summaries and player selection state. Ball-by-ball events are maintained in local match repositories used by web/mobile scoring flows.
+A match document (`MatchDocument`) contains innings summaries and player selection state. Ball-by-ball events are maintained in offline match repositories used by web/mobile scoring flows.
 
 ### Web App (`@crichead/web`)
 
@@ -81,7 +81,7 @@ Next.js App Router. Key routes:
 - `/matches/[id]/score` — Live scoring page
 - `/admin` — Admin dashboard
 
-Uses local storage backed providers for now.
+Uses offline storage-backed providers for now.
 
 ### Mobile App (`@crichead/mobile`)
 

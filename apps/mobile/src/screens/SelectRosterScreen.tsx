@@ -14,7 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
 import { type PlayerRole, type Toss, type MatchConfig } from '@crichead/core';
 import { type LocalTeamInfo } from './SelectTeamsScreen';
-import { saveLocalMatch, generateLocalId, toLocalRouteMatchId } from '../utils/localMatchStore';
+import { saveOfflineMatch, generateOfflineId, toOfflineRouteMatchId } from '../utils/offlineMatchStore';
 
 export interface LocalPlayerInfo {
   id: string;
@@ -134,9 +134,9 @@ export default function SelectRosterScreen({
             ? teamB.id
             : teamA.id;
 
-      const localId = generateLocalId();
-      await saveLocalMatch({
-        id: localId,
+      const offlineId = generateOfflineId();
+      await saveOfflineMatch({
+        id: offlineId,
         config: {
           teamAId: teamA.id,
           teamAName: teamA.name,
@@ -156,7 +156,7 @@ export default function SelectRosterScreen({
         updatedAt: Date.now()
       });
 
-      onNext(toLocalRouteMatchId(localId));
+      onNext(toOfflineRouteMatchId(offlineId));
     } catch (err) {
       Alert.alert(
         'Error',

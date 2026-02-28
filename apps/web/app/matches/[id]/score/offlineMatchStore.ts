@@ -1,6 +1,6 @@
 import type { EventSchema, MatchRepository, ScoringConfig } from '@crichead/core';
 
-export interface WebLocalMatchRecord {
+export interface WebOfflineMatchRecord {
   id: string;
   config: ScoringConfig;
   balls: EventSchema.BallEvent[];
@@ -14,7 +14,7 @@ export interface WebLocalMatchRecord {
   updatedAt: number;
 }
 
-const STORAGE_PREFIX = 'crichead:webLocalMatch:';
+const STORAGE_PREFIX = 'crichead:webOfflineMatch:';
 
 function getStorage(): Storage | null {
   if (typeof globalThis === 'undefined') return null;
@@ -26,23 +26,23 @@ function keyFor(id: string): string {
   return `${STORAGE_PREFIX}${id}`;
 }
 
-export function loadWebLocalMatch(id: string): WebLocalMatchRecord | null {
+export function loadWebOfflineMatch(id: string): WebOfflineMatchRecord | null {
   const storage = getStorage();
   if (!storage) return null;
 
   try {
     const raw = storage.getItem(keyFor(id));
-    return raw ? JSON.parse(raw) as WebLocalMatchRecord : null;
+    return raw ? JSON.parse(raw) as WebOfflineMatchRecord : null;
   } catch {
     return null;
   }
 }
 
-export function saveWebLocalMatch(record: WebLocalMatchRecord): void {
+export function saveWebOfflineMatch(record: WebOfflineMatchRecord): void {
   const storage = getStorage();
   if (!storage) return;
 
-  const nextRecord: WebLocalMatchRecord = {
+  const nextRecord: WebOfflineMatchRecord = {
     ...record,
     updatedAt: Date.now(),
   };
@@ -50,21 +50,21 @@ export function saveWebLocalMatch(record: WebLocalMatchRecord): void {
   storage.setItem(keyFor(record.id), JSON.stringify(nextRecord));
 }
 
-interface WebLocalMatchRepositoryOptions {
+interface WebOfflineMatchRepositoryOptions {
   matchId: string;
   getConfig: () => ScoringConfig;
 }
 
-export function createWebLocalMatchRepository({
+export function createWebOfflineMatchRepository({
   matchId,
   getConfig,
-}: WebLocalMatchRepositoryOptions): MatchRepository {
-  function ensureRecord(): WebLocalMatchRecord {
-    const existing = loadWebLocalMatch(matchId);
+}: WebOfflineMatchRepositoryOptions): MatchRepository {
+  function ensureRecord(): WebOfflineMatchRecord {
+    const existing = loadWebOfflineMatch(matchId);
     if (existing) return existing;
 
     const now = Date.now();
-    const created: WebLocalMatchRecord = {
+    const created: WebOfflineMatchRecord = {
       id: matchId,
       config: getConfig(),
       balls: [],
@@ -78,14 +78,14 @@ export function createWebLocalMatchRepository({
       updatedAt: now,
     };
 
-    saveWebLocalMatch(created);
+    saveWebOfflineMatch(created);
     return created;
   }
 
   return {
     async addBall(ball: EventSchema.BallEvent): Promise<void> {
       const record = ensureRecord();
-      saveWebLocalMatch({
+      saveWebOfflineMatch({
         ...record,
         balls: [...record.balls, ball],
         status: 'live',
@@ -95,7 +95,7 @@ export function createWebLocalMatchRepository({
     async undoLastBall(): Promise<void> {
       const record = ensureRecord();
       const nextBalls = record.balls.slice(0, -1);
-      saveWebLocalMatch({
+      saveWebOfflineMatch({
         ...record,
         balls: nextBalls,
         status: nextBalls.length > 0 || record.currentInningsIndex > 0 ? 'live' : 'upcoming',
@@ -104,7 +104,7 @@ export function createWebLocalMatchRepository({
 
     async endCurrentInnings(): Promise<void> {
       const record = ensureRecord();
-      saveWebLocalMatch({
+      saveWebOfflineMatch({
         ...record,
         status: 'live',
       });
@@ -112,7 +112,7 @@ export function createWebLocalMatchRepository({
 
     async updateMatchState(_incomingMatchId: string, state: Record<string, unknown>): Promise<void> {
       const record = ensureRecord();
-      saveWebLocalMatch({
+      saveWebOfflineMatch({
         ...record,
         strikerId: typeof state.strikerId === 'string' || state.strikerId === null
           ? state.strikerId as string | null

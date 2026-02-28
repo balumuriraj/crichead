@@ -10,12 +10,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Zap, Plus, Bell, Trash2 } from 'lucide-react-native';
-import { listLocalMatches, deleteLocalMatch, type LocalMatchRecord } from '../../src/utils/localMatchStore';
+import { listOfflineMatches, deleteOfflineMatch, type OfflineMatchRecord } from '../../src/utils/offlineMatchStore';
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
 import { EventSchema, EventScoring, migrateBallToEvent } from '@crichead/core';
 
-function getTeamIds(record: LocalMatchRecord): { teamAId: string; teamBId: string } {
+function getTeamIds(record: OfflineMatchRecord): { teamAId: string; teamBId: string } {
   const teamAId =
     (typeof record.config.teamA === 'string' && record.config.teamA) ||
     (typeof record.config.teamAId === 'string' && record.config.teamAId) ||
@@ -28,7 +28,7 @@ function getTeamIds(record: LocalMatchRecord): { teamAId: string; teamBId: strin
   return { teamAId, teamBId };
 }
 
-function getBattingOrder(record: LocalMatchRecord): { firstBattingTeamId: string; secondBattingTeamId: string } {
+function getBattingOrder(record: OfflineMatchRecord): { firstBattingTeamId: string; secondBattingTeamId: string } {
   const { teamAId, teamBId } = getTeamIds(record);
   const toss = record.config.toss;
 
@@ -57,7 +57,7 @@ function oversLabel(over: number, ball: number, hasBalls: boolean): string {
   return hasBalls ? `${over}.${ball}` : '--';
 }
 
-function buildScoreView(record: LocalMatchRecord): {
+function buildScoreView(record: OfflineMatchRecord): {
   teamAScore: string;
   teamBScore: string;
   currentScore: string;
@@ -136,12 +136,12 @@ function buildScoreView(record: LocalMatchRecord): {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const [allLocalMatches, setAllLocalMatches] = useState<LocalMatchRecord[]>([]);
+  const [allOfflineMatches, setAllOfflineMatches] = useState<OfflineMatchRecord[]>([]);
 
   const loadMatches = useCallback(() => {
-    listLocalMatches().then((records) => {
+    listOfflineMatches().then((records) => {
       const sorted = [...records].sort((a, b) => b.updatedAt - a.updatedAt);
-      setAllLocalMatches(sorted);
+      setAllOfflineMatches(sorted);
     });
   }, []);
 
@@ -151,7 +151,7 @@ export default function HomeScreen() {
     }, [loadMatches]),
   );
 
-  const handleDeleteMatch = useCallback((match: LocalMatchRecord) => {
+  const handleDeleteMatch = useCallback((match: OfflineMatchRecord) => {
     Alert.alert(
       'Delete Match',
       `Delete ${match.config.teamAName} vs ${match.config.teamBName}?`,
@@ -163,8 +163,8 @@ export default function HomeScreen() {
           onPress: async () => {
             try {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-              await deleteLocalMatch(match.id);
-              setAllLocalMatches((prev) => prev.filter((m) => m.id !== match.id));
+              await deleteOfflineMatch(match.id);
+              setAllOfflineMatches((prev) => prev.filter((m) => m.id !== match.id));
             } catch {
               Alert.alert('Error', 'Failed to delete match. Please try again.');
             }
@@ -175,13 +175,13 @@ export default function HomeScreen() {
   }, []);
 
   const activeMatches = useMemo(
-    () => allLocalMatches.filter((m) => m.status !== 'finished' && m.status !== 'abandoned'),
-    [allLocalMatches],
+    () => allOfflineMatches.filter((m) => m.status !== 'finished' && m.status !== 'abandoned'),
+    [allOfflineMatches],
   );
 
   const completedMatches = useMemo(
-    () => allLocalMatches.filter((m) => m.status === 'finished' || m.status === 'abandoned'),
-    [allLocalMatches],
+    () => allOfflineMatches.filter((m) => m.status === 'finished' || m.status === 'abandoned'),
+    [allOfflineMatches],
   );
 
   const recentCompletedMatches = useMemo(
@@ -189,19 +189,19 @@ export default function HomeScreen() {
     [completedMatches],
   );
 
-  const featuredLocal = activeMatches[0];
-  const featuredMatch = featuredLocal;
+  const featuredOffline = activeMatches[0];
+  const featuredMatch = featuredOffline;
   const listMatches = featuredMatch ? activeMatches.slice(1) : activeMatches;
   const recentActiveMatches = listMatches.slice(0, 3);
 
   const fMatchNameA = featuredMatch ? featuredMatch.config.teamAName : null;
   const fMatchNameB = featuredMatch ? featuredMatch.config.teamBName : null;
-  const fMatchStatus = featuredMatch ? featuredMatch.status : 'local';
+  const fMatchStatus = featuredMatch ? featuredMatch.status : 'offline';
   const scoreByMatchId = useMemo(() => {
     return Object.fromEntries(
-      allLocalMatches.map((match) => [match.id, buildScoreView(match)]),
+      allOfflineMatches.map((match) => [match.id, buildScoreView(match)]),
     );
-  }, [allLocalMatches]);
+  }, [allOfflineMatches]);
   const featuredScores = featuredMatch ? scoreByMatchId[featuredMatch.id] : null;
 
   return (
@@ -256,7 +256,7 @@ export default function HomeScreen() {
           <TouchableOpacity 
             style={styles.featuredCard}
             activeOpacity={0.8}
-            onPress={() => router.push(`/match/local-${featuredMatch.id}`)}
+            onPress={() => router.push(`/match/offline-${featuredMatch.id}`)}
           >
             <View style={styles.featuredHeader}>
               <View style={styles.featuredTag}>
@@ -265,7 +265,7 @@ export default function HomeScreen() {
               <View style={styles.featuredLiveRow}>
                 {fMatchStatus === 'live' && <View style={styles.featuredLiveDot} />}
                 <Text style={[styles.featuredLiveText, fMatchStatus !== 'live' && { color: Colors.gray400 }]}>
-                  {fMatchStatus === 'live' ? 'LIVE' : (fMatchStatus === 'upcoming' ? 'UPCOMING' : 'LOCAL')}
+                  {fMatchStatus === 'live' ? 'LIVE' : (fMatchStatus === 'upcoming' ? 'UPCOMING' : 'OFFLINE')}
                 </Text>
               </View>
             </View>
@@ -323,7 +323,7 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* ── Local Matches List ── */}
+        {/* ── Offline Matches List ── */}
         <View style={styles.listHeader}>
           <Text style={styles.listSectionTitle}>LIVE / UPCOMING</Text>
           <TouchableOpacity
@@ -339,7 +339,7 @@ export default function HomeScreen() {
           <View key={m.id} style={styles.listItem}>
             <TouchableOpacity
               style={styles.listLeftTouchable}
-              onPress={() => router.push(`/match/local-${m.id}`)}
+              onPress={() => router.push(`/match/offline-${m.id}`)}
               activeOpacity={0.7}
             >
               <View style={styles.listLeft}>
@@ -349,14 +349,14 @@ export default function HomeScreen() {
                   <Text style={styles.listTeamBold}>{m.config.teamBName}</Text>
                 </Text>
                 <Text style={styles.listSubtitle}>
-                  LOCAL MATCH • <Text style={styles.listHighlight}>{m.config.oversPerInnings} Ov</Text>
+                  OFFLINE MATCH • <Text style={styles.listHighlight}>{m.config.oversPerInnings} Ov</Text>
                 </Text>
               </View>
               <View style={styles.listRight}>
                 <Text style={styles.listScore}>{scoreByMatchId[m.id]?.currentScore ?? '--/--'}</Text>
                 <Text style={styles.listOvers}>({scoreByMatchId[m.id]?.currentOvers ?? '--'})</Text>
                 <View style={[styles.statusBadge, styles.statusBadgeUpcoming]}>
-                  <Text style={styles.statusBadgeText}>LOCAL</Text>
+                  <Text style={styles.statusBadgeText}>OFFLINE</Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -403,7 +403,7 @@ export default function HomeScreen() {
                   <Text style={styles.listTeamBold}>{m.config.teamBName}</Text>
                 </Text>
                 <Text style={styles.listSubtitle}>
-                  LOCAL MATCH • <Text style={styles.listHighlight}>{m.config.oversPerInnings} Ov</Text>
+                  OFFLINE MATCH • <Text style={styles.listHighlight}>{m.config.oversPerInnings} Ov</Text>
                 </Text>
               </View>
               <View style={styles.listRight}>

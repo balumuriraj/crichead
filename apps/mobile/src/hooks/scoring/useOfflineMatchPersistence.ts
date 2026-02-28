@@ -1,7 +1,7 @@
 import { useEffect, useState, type MutableRefObject } from 'react';
 import { migrateBallToEvent, type EventSchema } from '@crichead/core';
 import type { QuickMatchConfig } from '../../types/QuickMatchConfig';
-import { loadLocalMatch } from '../../utils/localMatchStore';
+import { loadOfflineMatch } from '../../utils/offlineMatchStore';
 
 interface SessionPersistenceApi {
   setMatchId: (matchId: string) => void;
@@ -11,31 +11,31 @@ interface SessionPersistenceApi {
   setPlayers: (strikerId: string | null, nonStrikerId: string | null, bowlerId: string | null) => void;
 }
 
-interface UseLocalMatchPersistenceInput {
-  initialLocalMatchId?: string;
-  localMatchId: string;
+interface UseOfflineMatchPersistenceInput {
+  initialOfflineMatchId?: string;
+  offlineMatchId: string;
   session: SessionPersistenceApi;
   setResolvedConfig: (config: QuickMatchConfig | undefined) => void;
   resolvedConfig?: QuickMatchConfig;
   isMatchEndedRef: MutableRefObject<boolean>;
 }
 
-export function useLocalMatchPersistence({
-  initialLocalMatchId,
-  localMatchId,
+export function useOfflineMatchPersistence({
+  initialOfflineMatchId,
+  offlineMatchId,
   session,
   setResolvedConfig,
-}: UseLocalMatchPersistenceInput) {
-  const [localLoading, setLocalLoading] = useState(!!initialLocalMatchId);
+}: UseOfflineMatchPersistenceInput) {
+  const [offlineLoading, setOfflineLoading] = useState(!!initialOfflineMatchId);
 
   useEffect(() => {
-    if (!initialLocalMatchId) return;
+    if (!initialOfflineMatchId) return;
 
     let mounted = true;
 
-    loadLocalMatch(initialLocalMatchId).then((record) => {
+    loadOfflineMatch(initialOfflineMatchId).then((record) => {
       if (!mounted || !record) {
-        if (mounted) setLocalLoading(false);
+        if (mounted) setOfflineLoading(false);
         return;
       }
 
@@ -47,7 +47,7 @@ export function useLocalMatchPersistence({
         )
         .filter((ball) => ball.inningsId === currentInningsId);
 
-      session.setMatchId(record.id ?? localMatchId);
+      session.setMatchId(record.id ?? offlineMatchId);
       session.setCurrentInningsIndex(record.currentInningsIndex ?? 0);
       session.setFirstInningsRuns(record.firstInningsRuns ?? null);
       session.setBalls(loadedBalls);
@@ -56,13 +56,13 @@ export function useLocalMatchPersistence({
         record.nonStrikerId ?? null,
         record.bowlerId ?? null
       );
-      setLocalLoading(false);
+      setOfflineLoading(false);
     });
 
     return () => {
       mounted = false;
     };
-  }, [initialLocalMatchId, localMatchId, session, setResolvedConfig]);
+  }, [initialOfflineMatchId, offlineMatchId, session, setResolvedConfig]);
 
-  return { localLoading };
+  return { offlineLoading };
 }

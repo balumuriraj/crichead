@@ -27,7 +27,7 @@ export function ScoringHeader({
       <View style={styles.liveBadge}>
         <View style={styles.liveDot} />
         <Text style={styles.liveBadgeText}>
-          {isLiveMode ? 'LIVE MATCH' : 'LOCAL'}
+          {isLiveMode ? 'LIVE MATCH' : 'OFFLINE'}
         </Text>
       </View>
 

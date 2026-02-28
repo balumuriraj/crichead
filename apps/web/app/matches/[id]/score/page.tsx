@@ -15,9 +15,9 @@ import {
   type ExtraType,
 } from '@crichead/ui/web';
 import {
-  createWebLocalMatchRepository,
-  loadWebLocalMatch,
-} from './localMatchStore';
+  createWebOfflineMatchRepository,
+  loadWebOfflineMatch,
+} from './offlineMatchStore';
 
 // ---------------------------------------------------------------------------
 // Component
@@ -25,9 +25,9 @@ import {
 
 export default function ScorePage() {
   const params = useParams();
-  const matchId = typeof params.id === 'string' ? params.id : 'local';
+  const matchId = typeof params.id === 'string' ? params.id : 'offline';
 
-  const persistedMatch = useMemo(() => loadWebLocalMatch(matchId), [matchId]);
+  const persistedMatch = useMemo(() => loadWebOfflineMatch(matchId), [matchId]);
 
   const match: any = useMemo(() => ({
     id: matchId,
@@ -45,7 +45,7 @@ export default function ScorePage() {
   const error: any = null;
 
   const repository = useMemo(
-    () => createWebLocalMatchRepository({
+    () => createWebOfflineMatchRepository({
       matchId,
       getConfig: () => match,
     }),
@@ -74,8 +74,8 @@ export default function ScorePage() {
     repository,
     match,
     isLiveMode: true,
-    localCurrentInningsIndex: persistedMatch?.currentInningsIndex ?? 0,
-    localFirstInningsRuns: persistedMatch?.firstInningsRuns ?? null,
+    offlineCurrentInningsIndex: persistedMatch?.currentInningsIndex ?? 0,
+    offlineFirstInningsRuns: persistedMatch?.firstInningsRuns ?? null,
     initialBalls: persistedMatch?.balls,
     initialStrikerId: persistedMatch?.strikerId ?? null,
     initialNonStrikerId: persistedMatch?.nonStrikerId ?? null,

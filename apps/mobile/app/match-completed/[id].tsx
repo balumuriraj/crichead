@@ -14,10 +14,10 @@ import { Colors, Spacing, BorderRadius, Typography } from '@crichead/ui/mobile';
 import { EventSchema, EventScoring, migrateBallToEvent } from '@crichead/core';
 import { CommentaryTabContent, ScorecardsTabContent } from '../../src/components/scoring';
 import {
-  loadLocalMatch,
-  normalizeLocalMatchId,
-  type LocalMatchRecord,
-} from '../../src/utils/localMatchStore';
+  loadOfflineMatch,
+  normalizeOfflineMatchId,
+  type OfflineMatchRecord,
+} from '../../src/utils/offlineMatchStore';
 import type {
   ScorecardBatterRow,
   ScorecardFallOfWicket,
@@ -36,7 +36,7 @@ const TABS: { key: CompletedTabKey; label: string }[] = [
   { key: 'gallery', label: 'GALLERY' },
 ];
 
-function getTeamIds(record: LocalMatchRecord): { teamAId: string; teamBId: string } {
+function getTeamIds(record: OfflineMatchRecord): { teamAId: string; teamBId: string } {
   const teamAId =
     (typeof record.config.teamA === 'string' && record.config.teamA) ||
     (typeof record.config.teamAId === 'string' && record.config.teamAId) ||
@@ -49,7 +49,7 @@ function getTeamIds(record: LocalMatchRecord): { teamAId: string; teamBId: strin
   return { teamAId, teamBId };
 }
 
-function getBattingOrder(record: LocalMatchRecord): { firstBattingTeamId: string; secondBattingTeamId: string } {
+function getBattingOrder(record: OfflineMatchRecord): { firstBattingTeamId: string; secondBattingTeamId: string } {
   const { teamAId, teamBId } = getTeamIds(record);
   const toss = record.config.toss;
 
@@ -70,7 +70,7 @@ function getBattingOrder(record: LocalMatchRecord): { firstBattingTeamId: string
   return { firstBattingTeamId: teamAId, secondBattingTeamId: teamBId };
 }
 
-function toEvents(record: LocalMatchRecord): EventSchema.BallEvent[] {
+function toEvents(record: OfflineMatchRecord): EventSchema.BallEvent[] {
   const rawBalls = record.balls ?? [];
   const firstInningsRuns = record.firstInningsRuns;
   let inferredRuns = 0;
@@ -109,7 +109,7 @@ function formatOvers(over: number, ball: number): string {
   return `${over}.${ball}`;
 }
 
-function buildScorecard(record: LocalMatchRecord, events: EventSchema.BallEvent[]) {
+function buildScorecard(record: OfflineMatchRecord, events: EventSchema.BallEvent[]) {
   const { teamAId, teamBId } = getTeamIds(record);
   const { firstBattingTeamId, secondBattingTeamId } = getBattingOrder(record);
 
@@ -397,39 +397,39 @@ export default function CompletedMatchSummaryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<CompletedTabKey>('scorecards');
-  const [localMatch, setLocalMatch] = useState<LocalMatchRecord | null>(null);
-  const [localLoading, setLocalLoading] = useState(true);
+  const [offlineMatch, setOfflineMatch] = useState<OfflineMatchRecord | null>(null);
+  const [offlineLoading, setOfflineLoading] = useState(true);
 
   useEffect(() => {
-    const normalizedId = id ? normalizeLocalMatchId(id) : '';
+    const normalizedId = id ? normalizeOfflineMatchId(id) : '';
     if (!normalizedId) {
-      setLocalMatch(null);
-      setLocalLoading(false);
+      setOfflineMatch(null);
+      setOfflineLoading(false);
       return;
     }
 
-    setLocalLoading(true);
-    loadLocalMatch(normalizedId)
+    setOfflineLoading(true);
+    loadOfflineMatch(normalizedId)
       .then((record) => {
-        setLocalMatch(record);
+        setOfflineMatch(record);
       })
       .finally(() => {
-        setLocalLoading(false);
+        setOfflineLoading(false);
       });
   }, [id]);
 
   const data = useMemo(() => {
-    if (!localMatch) {
+    if (!offlineMatch) {
       return null;
     }
-    const events = toEvents(localMatch);
+    const events = toEvents(offlineMatch);
     return {
       events,
-      ...buildScorecard(localMatch, events),
+      ...buildScorecard(offlineMatch, events),
     };
-  }, [localMatch]);
+  }, [offlineMatch]);
 
-  if (localLoading) {
+  if (offlineLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingWrap}>
@@ -440,7 +440,7 @@ export default function CompletedMatchSummaryScreen() {
     );
   }
 
-  if (!localMatch || !data) {
+  if (!offlineMatch || !data) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingWrap}>
@@ -465,13 +465,13 @@ export default function CompletedMatchSummaryScreen() {
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
         <View style={styles.scoreSummaryCard}>
-          <Text style={styles.fixtureTitle}>{localMatch.config.teamAName} vs {localMatch.config.teamBName}</Text>
+          <Text style={styles.fixtureTitle}>{offlineMatch.config.teamAName} vs {offlineMatch.config.teamBName}</Text>
           <View style={styles.teamRow}>
-            <Text style={styles.teamName}>{localMatch.config.teamAName}</Text>
+            <Text style={styles.teamName}>{offlineMatch.config.teamAName}</Text>
             <Text style={styles.teamScore}>{data.teamAScore} <Text style={styles.teamOvers}>({data.teamAOvers})</Text></Text>
           </View>
           <View style={styles.teamRow}>
-            <Text style={styles.teamName}>{localMatch.config.teamBName}</Text>
+            <Text style={styles.teamName}>{offlineMatch.config.teamBName}</Text>
             <Text style={styles.teamScore}>{data.teamBScore} <Text style={styles.teamOvers}>({data.teamBOvers})</Text></Text>
           </View>
           <Text style={styles.resultLine}>{data.resultText}</Text>
@@ -493,7 +493,7 @@ export default function CompletedMatchSummaryScreen() {
         </ScrollView>
 
         {activeTab === 'scorecards' && (
-          <ScorecardsTabContent innings={data.innings} currentInningsIndex={localMatch.currentInningsIndex ?? 0} />
+          <ScorecardsTabContent innings={data.innings} currentInningsIndex={offlineMatch.currentInningsIndex ?? 0} />
         )}
 
         {activeTab === 'commentary' && (
@@ -503,12 +503,12 @@ export default function CompletedMatchSummaryScreen() {
         {activeTab === 'teams' && (
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Teams</Text>
-            <Text style={styles.sectionSubhead}>{localMatch.config.teamAName}</Text>
-            {(localMatch.config.playingXI?.[(localMatch.config.teamA as string) ?? ''] ?? []).map((player: any) => (
+            <Text style={styles.sectionSubhead}>{offlineMatch.config.teamAName}</Text>
+            {(offlineMatch.config.playingXI?.[(offlineMatch.config.teamA as string) ?? ''] ?? []).map((player: any) => (
               <Text key={player.id} style={styles.listText}>• {player.name} ({player.role})</Text>
             ))}
-            <Text style={[styles.sectionSubhead, styles.sectionSubheadGap]}>{localMatch.config.teamBName}</Text>
-            {(localMatch.config.playingXI?.[(localMatch.config.teamB as string) ?? ''] ?? []).map((player: any) => (
+            <Text style={[styles.sectionSubhead, styles.sectionSubheadGap]}>{offlineMatch.config.teamBName}</Text>
+            {(offlineMatch.config.playingXI?.[(offlineMatch.config.teamB as string) ?? ''] ?? []).map((player: any) => (
               <Text key={player.id} style={styles.listText}>• {player.name} ({player.role})</Text>
             ))}
           </View>
@@ -560,7 +560,7 @@ export default function CompletedMatchSummaryScreen() {
         {activeTab === 'gallery' && (
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Gallery</Text>
-            <Text style={styles.listText}>No media captured for this local match.</Text>
+            <Text style={styles.listText}>No media captured for this offline match.</Text>
           </View>
         )}
       </ScrollView>

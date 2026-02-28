@@ -1,2 +1,2 @@
 export * from './StorageProvider';
-export * from './localMatchService';
+export * from './offlineMatchService';

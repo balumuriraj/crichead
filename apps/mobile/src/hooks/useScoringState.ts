@@ -13,11 +13,11 @@ import {
 } from '@crichead/core';
 import type { QuickMatchConfig } from '../types/QuickMatchConfig';
 import {
-  generateLocalId,
-  loadLocalMatch,
-  normalizeLocalMatchId,
-  saveLocalMatch,
-} from '../utils/localMatchStore';
+  generateOfflineId,
+  loadOfflineMatch,
+  normalizeOfflineMatchId,
+  saveOfflineMatch,
+} from '../utils/offlineMatchStore';
 import type { TabKey } from '../types/scoring';
 import type {
   ScorecardInnings,
@@ -25,10 +25,10 @@ import type {
   ScorecardFallOfWicket,
 } from '../types/scorecard';
 import type { PickerMode, PlayerInfo } from '@crichead/core';
-import { createLocalMatchRepository } from '../repositories/localMatchRepository';
+import { createOfflineMatchRepository } from '../repositories/offlineMatchRepository';
 import { useScoringUiState } from './scoring/useScoringUiState';
 import { useOverCompletionFlow } from './scoring/useOverCompletionFlow';
-import { useLocalMatchPersistence } from './scoring/useLocalMatchPersistence';
+import { useOfflineMatchPersistence } from './scoring/useOfflineMatchPersistence';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,7 +37,7 @@ import { useLocalMatchPersistence } from './scoring/useLocalMatchPersistence';
 interface UseScoringStateInput {
   matchId: string | null;
   config?: QuickMatchConfig;
-  initialLocalMatchId?: string;
+  initialOfflineMatchId?: string;
 }
 
 function formatOvers(over: number, ball: number): string {
@@ -89,7 +89,7 @@ function formatDismissal(ball: EventSchema.BallEvent): string {
 
 export interface ScoringState {
   // Loading
-  localLoading: boolean;
+  offlineLoading: boolean;
   // Live mode
   isLiveMode: boolean;
   canGoLive: boolean;
@@ -161,11 +161,11 @@ export interface ScoringState {
 export function useScoringState({
   matchId,
   config,
-  initialLocalMatchId,
+  initialOfflineMatchId,
 }: UseScoringStateInput): ScoringState {
   const router = useRouter();
 
-  // ---- Local state ----
+  // ---- Offline state ----
   const [resolvedConfig, setResolvedConfig] = useState<QuickMatchConfig | undefined>(config);
 
   // ---- Tab/UI state ----
@@ -180,17 +180,17 @@ export function useScoringState({
 
   const isLiveMode = false;
   const canonicalMatchId = matchId
-    ? normalizeLocalMatchId(matchId)
-    : initialLocalMatchId ?? generateLocalId();
+    ? normalizeOfflineMatchId(matchId)
+    : initialOfflineMatchId ?? generateOfflineId();
 
   // ---- Stable refs ----
-  const localMatchIdRef = useRef<string>(canonicalMatchId);
+  const offlineMatchIdRef = useRef<string>(canonicalMatchId);
   const isMatchEndedRef = useRef<boolean>(false);
   const resolvedConfigRef = useRef<QuickMatchConfig | undefined>(resolvedConfig);
   resolvedConfigRef.current = resolvedConfig;
   const repositoryRef = useRef<MatchRepository>(
-    createLocalMatchRepository({
-      matchId: localMatchIdRef.current,
+    createOfflineMatchRepository({
+      matchId: offlineMatchIdRef.current,
       getConfig: () => resolvedConfigRef.current,
     })
   );
@@ -215,18 +215,18 @@ export function useScoringState({
     setPickerMode: sessionSetPickerMode,
     session,
   } = useScoringSession({
-    matchId: localMatchIdRef.current,
+    matchId: offlineMatchIdRef.current,
     config: resolvedConfig ?? null,
     repository: repositoryRef.current,
     match: null,
     isLiveMode,
-    localCurrentInningsIndex: 0,
-    localFirstInningsRuns: null,
+    offlineCurrentInningsIndex: 0,
+    offlineFirstInningsRuns: null,
   });
 
-  const { localLoading } = useLocalMatchPersistence({
-    initialLocalMatchId,
-    localMatchId: localMatchIdRef.current,
+  const { offlineLoading } = useOfflineMatchPersistence({
+    initialOfflineMatchId,
+    offlineMatchId: offlineMatchIdRef.current,
     session,
     setResolvedConfig,
     isMatchEndedRef,
@@ -506,7 +506,7 @@ export function useScoringState({
               session.startNextInnings(stats.totalRuns);
               resetOverCompletionFlow();
             } else {
-              Alert.alert('Match Ended', 'The local match is over.');
+              Alert.alert('Match Ended', 'The offline match is over.');
               resetOverCompletionFlow();
               session.setPlayers(strikerId, nonStrikerId, null);
             }
@@ -529,7 +529,7 @@ export function useScoringState({
             setShowSettingsModal(false);
             isMatchEndedRef.current = true;
             if (resolvedConfig) {
-              const persistedRecord = await loadLocalMatch(localMatchIdRef.current);
+              const persistedRecord = await loadOfflineMatch(offlineMatchIdRef.current);
               const persistedBalls = (persistedRecord?.balls ?? []) as EventSchema.BallEvent[];
               const currentInningsId = String(currentInningsIndex);
 
@@ -543,8 +543,8 @@ export function useScoringState({
 
               const mergedBalls = [...historicalBalls, ...balls];
 
-              await saveLocalMatch({
-                id: localMatchIdRef.current,
+              await saveOfflineMatch({
+                id: offlineMatchIdRef.current,
                 config: resolvedConfig,
                 balls: mergedBalls,
                 strikerId,
@@ -568,7 +568,7 @@ export function useScoringState({
   ]);
 
   return {
-    localLoading,
+    offlineLoading,
     isLiveMode,
     canGoLive: false,
     displayTeamName: displayTeamName ?? 'Unknown',

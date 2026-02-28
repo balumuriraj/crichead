@@ -45,8 +45,8 @@ Orchestration logic built on domain primitives.
 
 Adapter implementations for app/runtime-specific backends.
 
-- `services/LocalStorageDataProvider.ts`: localStorage adapter for `DataProvider`.
-- `storage/*`: storage provider contracts and local storage helpers.
+- `services/OfflineStorageDataProvider.ts`: browser storage (`localStorage`) adapter for `DataProvider`.
+- `storage/*`: storage provider contracts and offline storage helpers.
 
 ### 4) Presentation (`src/presentation`)
 
@@ -88,7 +88,7 @@ Related actions follow the same pattern:
 - Extras: `handleExtra(type)` -> `createExtraEvent(...)`
 - Wicket: `handleWicket(...)` -> `createWicketEvent(...)`
 - Penalty: `handlePenalty(...)` -> `createPenaltyEvent(...)`
-- Undo: `undoBall()` -> local rollback + `MatchRepository.undoLastBall()`
+- Undo: `undoBall()` -> offline rollback + `MatchRepository.undoLastBall()`
 
 ## Public API cheat sheet
 
@@ -99,7 +99,7 @@ Related actions follow the same pattern:
 - Session runtime: `ScoringSession`, `ScoringSessionConfig`, `ScoringSessionSnapshot`
 - Event actions: `createScoreEvent`, `createExtraEvent`, `createWicketEvent`, `createPenaltyEvent`
 - Ports: `MatchRepository`, `DataProvider`
-- Infra helper: `createLocalStorageDataProvider`
+- Infra helper: `createOfflineStorageDataProvider`
 - Shared helpers/tokens: scoring utilities + design tokens
 
 ### From `@crichead/core/hooks`
@@ -113,7 +113,7 @@ Related actions follow the same pattern:
 
 - You must provide a concrete `MatchRepository` implementation to `ScoringSession` / `useScoringSession`.
 - You must wrap React trees using data-query hooks in `DataProviderContext.Provider`.
-- The local-storage adapter included here only implements `DataProvider` (read/query side), not `MatchRepository`.
+- The offline-storage adapter included here only implements `DataProvider` (read/query side), not `MatchRepository`.
 
 ## Key gotchas
 
@@ -137,7 +137,7 @@ Related actions follow the same pattern:
 8. `src/presentation/hooks/useScoringSession.ts`
 9. `src/presentation/hooks/useScoringEngine.ts`
 10. `src/presentation/DataProviderContext.ts`
-11. `src/infrastructure/services/LocalStorageDataProvider.ts`
+11. `src/infrastructure/services/OfflineStorageDataProvider.ts`
 12. `src/__tests__/scoring.test.ts`
 
 ## Test coverage snapshot

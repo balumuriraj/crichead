@@ -22,8 +22,8 @@ export interface UseScoringSessionProps {
   repository: MatchRepository;
   match?: MatchDocument | null;
   isLiveMode: boolean;
-  localCurrentInningsIndex: number;
-  localFirstInningsRuns: number | null;
+  offlineCurrentInningsIndex: number;
+  offlineFirstInningsRuns: number | null;
 
   /** Initial balls to seed the session */
   initialBalls?: BallEvent[];
@@ -76,8 +76,8 @@ export function useScoringSession(props: UseScoringSessionProps): UseScoringSess
     repository,
     match,
     isLiveMode,
-    localCurrentInningsIndex,
-    localFirstInningsRuns,
+    offlineCurrentInningsIndex,
+    offlineFirstInningsRuns,
     initialBalls,
     initialStrikerId,
     initialNonStrikerId,
@@ -89,14 +89,14 @@ export function useScoringSession(props: UseScoringSessionProps): UseScoringSess
   if (!sessionRef.current) {
     const sessionConfig: ScoringSessionConfig = {
       matchId,
-      currentInningsIndex: localCurrentInningsIndex,
+      currentInningsIndex: offlineCurrentInningsIndex,
       engineConfig: config ?? { oversPerInnings: 20 },
       repository,
       initialBalls,
       initialStrikerId,
       initialNonStrikerId,
       initialBowlerId,
-      firstInningsRuns: localFirstInningsRuns,
+      firstInningsRuns: offlineFirstInningsRuns,
     };
     sessionRef.current = new ScoringSession(sessionConfig);
   }
@@ -115,8 +115,8 @@ export function useScoringSession(props: UseScoringSessionProps): UseScoringSess
     config,
     match,
     isLiveMode,
-    localCurrentInningsIndex: snapshot.currentInningsIndex,
-    localFirstInningsRuns: snapshot.firstInningsRuns,
+    offlineCurrentInningsIndex: snapshot.currentInningsIndex,
+    offlineFirstInningsRuns: snapshot.firstInningsRuns,
     strikerId: snapshot.strikerId,
     nonStrikerId: snapshot.nonStrikerId,
     bowlerId: snapshot.bowlerId,

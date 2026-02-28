@@ -16,7 +16,7 @@ type MatchStep =
   | { step: 'toss'; config: MatchConfig; teamA: LocalTeamInfo; teamB: LocalTeamInfo }
   | { step: 'selectRoster'; config: MatchConfig; teamA: LocalTeamInfo; teamB: LocalTeamInfo; toss: Toss }
   | { step: 'quickMatch' }
-  | { step: 'scoring'; matchId: string | null; config?: QuickMatchConfig; initialLocalMatchId?: string };
+  | { step: 'scoring'; matchId: string | null; config?: QuickMatchConfig; initialOfflineMatchId?: string };
 
 export default function MatchScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -27,8 +27,8 @@ export default function MatchScreen() {
       ? { step: 'matchDetails' }
       : id === 'quick'
         ? { step: 'quickMatch' }
-        : id.startsWith('local-')
-          ? { step: 'scoring', matchId: null, initialLocalMatchId: id.replace('local-', '') }
+        : id.startsWith('offline-')
+          ? { step: 'scoring', matchId: null, initialOfflineMatchId: id.replace('offline-', '') }
           : { step: 'scoring', matchId: id! };
 
   const [current, setCurrent] = useState<MatchStep>(initialStep);
@@ -110,7 +110,7 @@ export default function MatchScreen() {
     <ScoringScreen
       matchId={current.matchId}
       config={current.config}
-      initialLocalMatchId={current.initialLocalMatchId}
+      initialOfflineMatchId={current.initialOfflineMatchId}
       onBack={() => router.back()}
     />
   );

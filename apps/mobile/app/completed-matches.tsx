@@ -6,9 +6,9 @@ import { ArrowLeft, Trash2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, Typography, BorderRadius } from '@crichead/ui/mobile';
 import { EventSchema, EventScoring, migrateBallToEvent } from '@crichead/core';
-import { deleteLocalMatch, listLocalMatches, type LocalMatchRecord } from '../src/utils/localMatchStore';
+import { deleteOfflineMatch, listOfflineMatches, type OfflineMatchRecord } from '../src/utils/offlineMatchStore';
 
-function getTeamIds(record: LocalMatchRecord): { teamAId: string; teamBId: string } {
+function getTeamIds(record: OfflineMatchRecord): { teamAId: string; teamBId: string } {
   const teamAId =
     (typeof record.config.teamA === 'string' && record.config.teamA) ||
     (typeof record.config.teamAId === 'string' && record.config.teamAId) ||
@@ -21,7 +21,7 @@ function getTeamIds(record: LocalMatchRecord): { teamAId: string; teamBId: strin
   return { teamAId, teamBId };
 }
 
-function getBattingOrder(record: LocalMatchRecord): { firstBattingTeamId: string; secondBattingTeamId: string } {
+function getBattingOrder(record: OfflineMatchRecord): { firstBattingTeamId: string; secondBattingTeamId: string } {
   const { teamAId, teamBId } = getTeamIds(record);
   const toss = record.config.toss;
 
@@ -50,7 +50,7 @@ function oversLabel(over: number, ball: number, hasBalls: boolean): string {
   return hasBalls ? `${over}.${ball}` : '--';
 }
 
-function buildScoreView(record: LocalMatchRecord): {
+function buildScoreView(record: OfflineMatchRecord): {
   currentScore: string;
   currentOvers: string;
 } {
@@ -120,10 +120,10 @@ function buildScoreView(record: LocalMatchRecord): {
 
 export default function CompletedMatchesScreen() {
   const router = useRouter();
-  const [completedMatches, setCompletedMatches] = useState<LocalMatchRecord[]>([]);
+  const [completedMatches, setCompletedMatches] = useState<OfflineMatchRecord[]>([]);
 
   const loadCompletedMatches = useCallback(() => {
-    listLocalMatches().then((records) => {
+    listOfflineMatches().then((records) => {
       const completed = records
         .filter((m) => m.status === 'finished' || m.status === 'abandoned')
         .sort((a, b) => b.updatedAt - a.updatedAt);
@@ -137,7 +137,7 @@ export default function CompletedMatchesScreen() {
     }, [loadCompletedMatches]),
   );
 
-  const handleDeleteMatch = useCallback((match: LocalMatchRecord) => {
+  const handleDeleteMatch = useCallback((match: OfflineMatchRecord) => {
     Alert.alert(
       'Delete Match',
       `Delete ${match.config.teamAName} vs ${match.config.teamBName}?`,
@@ -149,7 +149,7 @@ export default function CompletedMatchesScreen() {
           onPress: async () => {
             try {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-              await deleteLocalMatch(match.id);
+              await deleteOfflineMatch(match.id);
               setCompletedMatches((prev) => prev.filter((m) => m.id !== match.id));
             } catch {
               Alert.alert('Error', 'Failed to delete match. Please try again.');
@@ -191,7 +191,7 @@ export default function CompletedMatchesScreen() {
                   <Text style={styles.listTeamBold}>{m.config.teamBName}</Text>
                 </Text>
                 <Text style={styles.listSubtitle}>
-                  LOCAL MATCH • <Text style={styles.listHighlight}>{m.config.oversPerInnings} Ov</Text>
+                  OFFLINE MATCH • <Text style={styles.listHighlight}>{m.config.oversPerInnings} Ov</Text>
                 </Text>
               </View>
               <View style={styles.listRight}>
